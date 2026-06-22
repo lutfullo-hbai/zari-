@@ -1,2 +1,244 @@
-# zari-
-agent for me 
+# Zari — Shaxsiy AI Yordamchi
+
+> "Ikkinchi miyyang — doim yoningda, doim o'rganib boradi."
+
+Zari — ovoz bilan boshqariladigan, kompyutеr ichida yashaydigan, foydalanuvchining fikrlash uslubini o'rganib boradigan shaxsiy AI yordamchi. Iron Man filmidagi Jarvis singari — lekin sening hayoting, sening tilingda.
+
+---
+
+## Maqsad
+
+5 yil ichida Zari quyidagiga aylanadi:
+
+- Sening fikrlash uslubingni biladigan va shu asosida harakat qiladigan agent
+- Mustaqil ravishda vazifalarni rejalashtirib, bajarib, tekshirib topshiradigan multi-agent sistema
+- Ovoz, matn, veb va tizim darajasida ishlaydigan to'liq shaxsiy OS ichidagi yordamchi
+- Hech qanday bulut xizmati kerak bo'lmaydigan, to'liq local va xususiy sistema
+
+---
+
+## Twelve-Factor App Tamoyillari
+
+Zari [12factor.net](https://12factor.net/) tamoyillariga asoslanib quriladi:
+
+| Factor | Zari da qanday |
+|--------|----------------|
+| Codebase | Bitta repo, barcha muhitlar uchun |
+| Dependencies | `requirements.txt` + virtual env, tizimga bog'liq emas |
+| Config | `.env` fayl, kod ichida hech qanday sir yo'q |
+| Backing services | Ollama, Redis, PostgreSQL — almashtirish mumkin |
+| Build/Release/Run | Docker orqali ajratilgan bosqichlar |
+| Processes | Stateless processlar, holat tashqi xizmatlarda |
+| Port binding | FastAPI o'z portini expose qiladi |
+| Concurrency | Vazifalar parallel ishlaydigan worker'lar orqali |
+| Disposability | Tez ishga tushish, to'xtash — ma'lumot yo'qolmaydi |
+| Dev/Prod parity | Docker Compose — dev va prod bir xil |
+| Logs | stdout ga, tizim yig'adi |
+| Admin processes | Alohida CLI buyruqlar orqali |
+
+---
+
+## Arxitektura
+
+```
+zari/
+├── core/
+│   ├── main.py              # Asosiy loop — wake word eshitish
+│   ├── config.py            # .env asosida konfiguratsiya
+│   └── router.py            # Niyat → modul yo'naltirish
+├── voice/
+│   ├── wake.py              # "Zari" so'zini aniqlash (Porcupine/Vosk)
+│   ├── stt.py               # Ovoz → matn (Whisper local)
+│   └── tts.py               # Matn → ovoz (edge-tts)
+├── llm/
+│   ├── ollama.py            # Ollama bilan muloqot
+│   ├── memory.py            # Suhbat tarixi + uzun xotira
+│   └── persona.py           # Foydalanuvchi profili va fikrlash uslubi
+├── skills/
+│   ├── base.py              # BaseSkill abstract class
+│   ├── search.py            # Internet qidiruv
+│   ├── music.py             # YouTube musiqa
+│   ├── finance.py           # Valyuta, oltin narxlari + tahlil
+│   ├── messaging.py         # Telegram, Email yuborish
+│   └── system.py            # OS buyruqlari
+├── agents/
+│   ├── orchestrator.py      # Zari — bosh agent
+│   ├── coder.py             # Kod yozuvchi agent
+│   ├── tester.py            # Test yozuvchi agent
+│   ├── deployer.py          # Deploy qiluvchi agent
+│   └── researcher.py        # Ma'lumot to'plovchi agent
+├── data/
+│   ├── memory.db            # SQLite — lokal xotira
+│   └── profiles/            # Foydalanuvchi profili JSON
+├── tests/
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+└── .env.example
+```
+
+---
+
+## Milestonelar
+
+### Milestone 1 — Ovoz va Asosiy Muloqot
+**Muddat: 2 hafta**
+
+**Maqsad:** Zari birinchi marta gapiradi.
+
+- [ ] Wake word aniqlash — "Zari" deyilsa faollashadi, boshqa ovozlarga javob bermaydi
+- [ ] STT — Whisper local orqali ovozni matnga aylantiradi
+- [ ] LLM — Ollama (qwen2.5:3b) orqali javob beradi
+- [ ] TTS — edge-tts orqali ovoz bilan javob qaytaradi
+- [ ] Suhbat tarixi — sessiya davomida eslab qoladi
+- [ ] `.env` asosida konfiguratsiya
+
+**Natija:** "Zari, bugun qanday kun?" deysan — u javob beradi.
+
+---
+
+### Milestone 2 — Qidiruv va Bilim
+**Muddat: 2 hafta**
+
+**Maqsad:** Zari internetdan ma'lumot topadi va tahlil qiladi.
+
+- [ ] DuckDuckGo / SerpAPI orqali qidiruv
+- [ ] Veb sahifani o'qish va xulosalash
+- [ ] Ilmiy manbalardan (Wikipedia, PubMed) ma'lumot olish
+- [ ] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
+- [ ] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
+
+**Natija:** Har qanday savolga fact-based javob beradi.
+
+---
+
+### Milestone 3 — Skills Tizimi
+**Muddat: 3 hafta**
+
+**Maqsad:** Zari amaliy vazifalarni bajaradi.
+
+- [ ] YouTube dan musiqa qidirish va link berish
+- [ ] Valyuta va oltin narxlarini scraping qilish
+- [ ] 5 yillik narx grafigi chiqarish (matplotlib)
+- [ ] Tahlil va xulosa aytish
+- [ ] Fayl yuklab olish (yt-dlp)
+- [ ] BaseSkill — yangi skill qo'shish oson bo'lsin
+
+**Natija:** "Zari, so'nggi 5 yil oltin narxini tahlil qil" — grafik + ovozli xulosa.
+
+---
+
+### Milestone 4 — Xotira va O'rganish
+**Muddat: 3 hafta**
+
+**Maqsad:** Zari seni o'rganib boradi.
+
+- [ ] Uzun muddatli xotira (ChromaDB — local vector DB)
+- [ ] Foydalanuvchi profili — qiziqishlar, fikrlash uslubi, odatlar
+- [ ] "Sen doim ertalab ishlay olmasang" — o'zi sezadi
+- [ ] Yangi ma'lumot o'rgatsa — eslab qoladi
+- [ ] Kontekstli javoblar — oldingi suhbatlardan foydalanadi
+
+**Natija:** 1 oy ishlatgandan keyin Zari seni taniydi.
+
+---
+
+### Milestone 5 — Xabar va Avtomatlashtirish
+**Muddat: 2 hafta**
+
+**Maqsad:** Zari sening nomingdan harakat qiladi.
+
+- [ ] Telegram xabar yuborish
+- [ ] Email yuborish
+- [ ] Vaqt asosida avtomatik vazifalar — "soat 8 da Oybek ga xabar yubor"
+- [ ] APScheduler orqali rejalashtirish
+- [ ] Javob shablonlari — "bunday qilib javob ber"
+
+**Natija:** "Zari, ertaga ertalab Akbar aka ga xabar yubor" — bajaradi.
+
+---
+
+### Milestone 6 — Multi-Agent Sistema
+**Muddat: 2 oy**
+
+**Maqsad:** Zari boshqa agentlarni boshqaradi.
+
+- [ ] Orchestrator — Zari bosh agent sifatida
+- [ ] Coder Agent — kod yozadi (Ollama)
+- [ ] Tester Agent — test yozadi va ishlatadi
+- [ ] Deployer Agent — Docker, Git orqali deploy qiladi
+- [ ] Researcher Agent — ma'lumot to'playdi
+- [ ] Agent'lar o'rtasida xabar almashish protokoli
+- [ ] "Zari, menga vazifa boshqaruv tizimi qur" → agentlar birgalikda quradi
+
+**Natija:** Bitta buyruq — to'liq loyiha quriladi.
+
+---
+
+### Milestone 7 — To'liq Zari
+**Muddat: 6 oy+**
+
+**Maqsad:** Haqiqiy shaxsiy OS yordamchisi.
+
+- [ ] Kompyuter ekranini ko'radi va tushunadi (vision model)
+- [ ] Ilovalarni ochadi, yopadi, boshqaradi
+- [ ] Brauzer orqali harakat qiladi (Selenium/Playwright)
+- [ ] Ovoz profili — faqat sening ovozingni taniydi
+- [ ] Oflayn rejim — internet bo'lmasa ham ishlaydi
+- [ ] Telefon bilan sinxronizatsiya
+
+---
+
+## Texnologiyalar
+
+| Qatlam | Texnologiya | Sabab |
+|--------|-------------|-------|
+| Wake word | Vosk / Porcupine | Local, bepul |
+| STT | Whisper (local) | Aniq, oflayn |
+| LLM | Ollama (qwen2.5, llama3) | Local, bepul |
+| TTS | edge-tts | Sifatli, bepul |
+| Xotira | ChromaDB + SQLite | Local vector DB |
+| Qidiruv | DuckDuckGo API | Bepul |
+| Scraping | BeautifulSoup + Selenium | Moslashuvchan |
+| Grafik | Matplotlib | Oddiy, kuchli |
+| Rejalashtirish | APScheduler | Yengil |
+| Backend | FastAPI | Tez, async |
+| Deploy | Docker Compose | Har joyda ishlaydi |
+
+---
+
+## O'rnatish
+
+```bash
+git clone https://github.com/username/zari.git
+cd zari
+cp .env.example .env
+pip install -r requirements.txt
+python core/main.py
+```
+
+---
+
+## Muhit o'zgaruvchilari (.env)
+
+```env
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:3b
+WAKE_WORD=zari
+TTS_VOICE=uz-UZ-MadinaNeural
+TELEGRAM_TOKEN=
+EMAIL_ADDRESS=
+```
+
+---
+
+## Hissa qo'shish
+
+Hozircha shaxsiy loyiha. Keyinchalik ochiq manba bo'lishi mumkin.
+
+---
+
+## Litsenziya
+
+MIT
+
