@@ -16,6 +16,7 @@ from db.cache import close_redis, cache_llm_response, get_cached_llm_response
 from llm.memory import SessionMemory
 from llm.ollama import OllamaClient
 from llm.translator import Translator
+from skills.search import SearchSkill
 from voice.stt import SpeechToText
 from voice.tts import TextToSpeech
 from voice.wake import WakeWordDetector
@@ -35,6 +36,7 @@ class ZariPipeline:
         self.llm = OllamaClient()
         self.memory = SessionMemory()
         self.wake = WakeWordDetector()
+        self.search_skill = SearchSkill()
         self.translator = Translator() if settings.enable_translation else None
 
         self.audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
@@ -105,18 +107,38 @@ class ZariPipeline:
                     log.info("UZ->EN: '%s' -> '%s'", text, llm_input)
 
                 await self.memory.add("user", llm_input)
-                try:
-                    cached = await get_cached_llm_response(llm_input)
-                    if cached:
-                        response = cached
-                        log.info("LLM (cache): %s", response)
+
+                if intent == "search":
+                    search_result = await self.search_skill.execute(text)
+                    if search_result:
+                        response = search_result["response"]
+                        context = search_result["context"]
+                        source = search_result["source"]
+                        await self.memory.add(
+                            "system",
+                            f"Internetdan topilgan ma'lumot ({source}): {context}",
+                        )
+                        log.info("Search (%s): %s", source, response)
                     else:
-                        response = await asyncio.to_thread(self.llm.chat, self.memory.get())
-                        await cache_llm_response(llm_input, response)
-                        log.info("LLM: %s", response)
-                except Exception as e:
-                    log.error("LLM xatosi (Ollama ishlayaptimi?): %s", e, exc_info=True)
-                    response = "Kechirasiz, hozir javob bera olmayman. Ollama bilan bog'liq muammo bor."
+                        log.info("Search natija topmadi, LLM ga o'tiladi")
+                        response = None
+                else:
+                    response = None
+
+                if response is None:
+                    try:
+                        cached = await get_cached_llm_response(llm_input)
+                        if cached:
+                            response = cached
+                            log.info("LLM (cache): %s", response)
+                        else:
+                            response = await asyncio.to_thread(self.llm.chat, self.memory.get())
+                            await cache_llm_response(llm_input, response)
+                            log.info("LLM: %s", response)
+                    except Exception as e:
+                        log.error("LLM xatosi (Ollama ishlayaptimi?): %s", e, exc_info=True)
+                        response = "Kechirasiz, hozir javob bera olmayman. Ollama bilan bog'liq muammo bor."
+
                 await self.memory.add("assistant", response)
 
                 output = response

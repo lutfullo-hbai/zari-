@@ -13,3 +13,7 @@ numpy>=1.26
 asyncio
 asyncpg>=0.30
 redis>=5.2
+duckduckgo_search>=7.0
+beautifulsoup4>=4.12
+httpx>=0.27
+wikipedia-api>=0.7
