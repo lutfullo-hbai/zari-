@@ -1,0 +1,17 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.git/
+.gitignore
+*.md
+*.wav
+*.mp3
+data/
+docker-data/
+.vscode/
+.idea/

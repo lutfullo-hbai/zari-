@@ -1,0 +1,14 @@
+[project]
+name = "zari"
+version = "0.1.0"
+description = "Shaxsiy AI Yordamchi — Jarvis-like Assistant"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
