@@ -2,7 +2,11 @@ import re
 
 
 INTENT_PATTERNS = {
-    "search": r"\b(qidir|top|izla|search|find)\b",
+    "search": (
+        r"\b(qidir|top|izla|search|find|nima\b|kim\b|qanday|"
+        r"sabab|define|meaning|what\b|who\b|why\b|when\b|"
+        r"degani|haqida|ma.lumot|tushuntir|izohla)"
+    ),
     "music": r"\b(musiqa|qo.?y|qo.?shiq|music|song|play)\b",
     "weather": r"\b(ob.havo|havo|weather)\b",
     "time": r"\b(soat necha|vaqt|time|kun)\b",

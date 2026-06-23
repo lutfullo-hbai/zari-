@@ -17,29 +17,10 @@ services:
     stdin_open: true
     tty: true
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: zari-postgres
-    environment:
-      POSTGRES_USER: zari
-      POSTGRES_PASSWORD: zari
-      POSTGRES_DB: zari
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zari -d zari"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -50,5 +31,4 @@ services:
       - redisdata:/data
 
 volumes:
-  pgdata:
   redisdata:
