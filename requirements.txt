@@ -1,0 +1,15 @@
+python-dotenv>=1.0
+pydantic-settings>=2.0
+pydantic>=2.0
+ollama>=0.4
+edge-tts>=6.0
+faster-whisper>=1.0
+webrtcvad>=2.0
+pytest>=8.0
+pytest-asyncio>=0.24
+sounddevice>=0.5
+soundfile>=0.12
+numpy>=1.26
+asyncio
+asyncpg>=0.30
+redis>=5.2
