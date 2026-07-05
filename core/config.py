@@ -9,7 +9,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     wake_word: str = "jarvis"
+    wake_threshold: float = 0.5
+    wake_word_models: list[str] | None = None
+
     tts_voice: str = "uz-UZ-MadinaNeural"
+    tts_engine: str = "edge"  # "edge" | "piper"
+    piper_model_path: str = ""
+    piper_voice: str = "en_US-lessac-medium"
 
     telegram_token: str = ""
     email_address: str = ""
@@ -19,6 +25,16 @@ class Settings(BaseSettings):
     audio_input_device: int | None = None
     audio_output_device: int | None = None
     audio_output_sample_rate: int = 48000
+
+    perplexica_url: str = ""
+    perplexica_focus_mode: str = "web"
+    search_backend: str = "auto"
+
+    weather_api_key: str = ""
+    n8n_workflows_dir: str = ""
+
+    rate_limit_max_calls: int = 10
+    rate_limit_window: int = 60
 
     log_level: str = "INFO"
     log_format: str = "json"
