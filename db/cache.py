@@ -29,7 +29,7 @@ async def close_redis():
 async def cache_session_messages(session_id: str, messages: list[dict], ttl: int = 3600):
     r = await get_redis()
     key = f"session:{session_id}:messages"
-    await r.setex(key, ttl, json.dumps(messages))
+    await r.set(key, json.dumps(messages), ex=ttl)
 
 
 async def get_cached_session_messages(session_id: str) -> list[dict] | None:
@@ -44,7 +44,7 @@ async def get_cached_session_messages(session_id: str) -> list[dict] | None:
 async def cache_llm_response(input_text: str, response: str, ttl: int = 86400):
     r = await get_redis()
     key = f"llm:cache:{_hash(input_text)}"
-    await r.setex(key, ttl, response)
+    await r.set(key, response, ex=ttl)
 
 
 async def get_cached_llm_response(input_text: str) -> str | None:
