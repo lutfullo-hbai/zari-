@@ -1,5 +1,5 @@
+import asyncio
 import logging
-from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -7,6 +7,7 @@ from duckduckgo_search import DDGS
 import wikipedia
 
 from core.config import settings
+from db.cache import cache_llm_response, get_cached_llm_response
 from llm.ollama import OllamaClient
 from skills.base import BaseSkill
 
@@ -16,21 +17,63 @@ MAX_CHARS_PER_PAGE = 3000
 MAX_RESULTS = 3
 
 
-class SearchSkill(BaseSkill):
-    def __init__(self):
-        self.llm = OllamaClient()
+PERPLEXICA_FOCUS_MODES = {"web", "academic", "news", "social", "writing"}
 
-    async def execute(self, query: str) -> dict:
+
+class SearchSkill(BaseSkill):
+    priority = 20
+    timeout = 60.0
+    retries = 1
+
+    def __init__(self, llm: OllamaClient | None = None):
+        self.llm = llm or OllamaClient()
+        self.perplexica_url = settings.perplexica_url.rstrip("/") if settings.perplexica_url else ""
+        self.search_backend = (settings.search_backend or "auto").lower()
+        self.perplexica_focus = (
+            settings.perplexica_focus_mode or "web"
+        ).lower()
+        if self.perplexica_focus not in PERPLEXICA_FOCUS_MODES:
+            self.perplexica_focus = "web"
+
+    async def execute(self, query: str) -> dict | None:
+        try:
+            cached = await get_cached_llm_response(f"search:{query}")
+            if cached:
+                return {
+                    "response": cached,
+                    "context": cached[:500],
+                    "source": "cache",
+                }
+        except Exception:
+            pass
+
+        perplexica_result = await self._search_with_perplexica(query)
+        if perplexica_result:
+            try:
+                await cache_llm_response(f"search:{query}", perplexica_result["response"])
+            except Exception:
+                pass
+            return perplexica_result
+
         context = ""
         source = ""
 
-        wiki = await self._wikipedia(query)
+        try:
+            wiki = await self._wikipedia(query)
+        except Exception as e:
+            log.warning("Wikipedia xatosi: %s", e)
+            wiki = None
+
         if wiki:
             context = wiki
             source = "wikipedia"
             log.info("Wikipedia ma'lumot topildi: %d chars", len(context))
         else:
-            results = await self._search_web(query)
+            try:
+                results = await self._search_web(query)
+            except Exception as e:
+                log.warning("Search xatosi: %s", e)
+                results = None
             if results:
                 context = await self._fetch_pages(results)
                 source = "web"
@@ -40,20 +83,86 @@ class SearchSkill(BaseSkill):
             return None
 
         summary = await self._summarize(context, query)
-        return {
+        result = {
             "response": summary,
             "context": context[:500],
             "source": source,
         }
+        if summary:
+            try:
+                await cache_llm_response(f"search:{query}", summary)
+            except Exception:
+                pass
+        return result
+
+    async def _search_with_perplexica(self, query: str) -> dict | None:
+        if not self.perplexica_url:
+            return None
+
+        if self.search_backend not in {"auto", "perplexica"}:
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    f"{self.perplexica_url}/api/search",
+                    json={
+                        "query": query,
+                        "focusMode": self.perplexica_focus,
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            answer = ""
+            sources = []
+
+            messages = data.get("message") or []
+            for msg in messages:
+                if isinstance(msg, dict):
+                    if msg.get("type") == "text":
+                        answer = msg.get("content", "")
+                    elif msg.get("type") == "sources":
+                        sources = msg.get("sources", [])
+
+            if not answer:
+                return None
+
+            source_str = "\n".join(
+                s.get("metadata", {}).get("title", s.get("url", ""))
+                for s in sources[:MAX_RESULTS]
+            ) if sources else ""
+
+            context = answer
+            if source_str:
+                context += f"\n\nManbalar:\n{source_str}"
+
+            return {
+                "response": answer,
+                "context": context[:500],
+                "source": "perplexica",
+            }
+        except Exception as e:
+            log.warning("Perplexica qidiruv xatosi: %s", e)
+            return None
 
     async def _search_web(self, query: str) -> list[dict]:
         try:
-            with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=MAX_RESULTS))
-                return [
-                    {"title": r["title"], "url": r["href"], "body": r.get("body", "")}
-                    for r in results
-                ]
+            def _search():
+                with DDGS(timeout=10) as ddgs:
+                    return list(ddgs.text(query, max_results=MAX_RESULTS))
+            results = await asyncio.wait_for(
+                asyncio.to_thread(_search),
+                timeout=15.0,
+            )
+            return [
+                {"title": r["title"], "url": r["href"], "body": r.get("body", "")}
+                for r in results
+            ]
+        except asyncio.TimeoutError:
+            log.error("Qidiruv timeout: 15 soniya")
+            return []
         except Exception as e:
             log.error("Qidiruv xatosi: %s", e)
             return []
@@ -84,20 +193,28 @@ class SearchSkill(BaseSkill):
 
     async def _wikipedia(self, query: str) -> str | None:
         try:
-            wikipedia.set_lang("uz")
-            search = wikipedia.search(query)
+            def _wiki_search_uz():
+                wikipedia.set_lang("uz")
+                return wikipedia.search(query)
+            search = await asyncio.to_thread(_wiki_search_uz)
             if not search:
-                wikipedia.set_lang("en")
-                search = wikipedia.search(query)
+                def _wiki_search_en():
+                    wikipedia.set_lang("en")
+                    return wikipedia.search(query)
+                search = await asyncio.to_thread(_wiki_search_en)
             if not search:
                 return None
             try:
-                page = wikipedia.page(search[0])
+                def _wiki_page():
+                    return wikipedia.page(search[0])
+                page = await asyncio.to_thread(_wiki_page)
                 text = page.summary[:MAX_CHARS_PER_PAGE]
                 return f"Wikipedia: {page.title}\n\n{text}"
             except wikipedia.DisambiguationError as e:
                 if e.options:
-                    page = wikipedia.page(e.options[0])
+                    def _wiki_disambig():
+                        return wikipedia.page(e.options[0])
+                    page = await asyncio.to_thread(_wiki_disambig)
                     text = page.summary[:MAX_CHARS_PER_PAGE]
                     return f"Wikipedia: {page.title}\n\n{text}"
             except Exception:
@@ -107,16 +224,19 @@ class SearchSkill(BaseSkill):
             return None
 
     async def _summarize(self, context: str, query: str) -> str:
-        prompt = (
-            "Berilgan matn asosida foydalanuvchi savoliga o'zbek tilida qisqa va aniq javob ber. "
-            "Faqat matndagi ma'lumotlardan foydalan, o'zing ma'lumot qo'shma. "
-            "Javob 3-5 gapdan oshmasin.\n\n"
-            f"Foydalanuvchi: {query}\n\n"
-            f"Matn: {context[:4000]}\n\n"
-            "Javob:"
-        )
+        messages = [
+            {"role": "system", "content": "Siz faqat o'zbek tilida javob beradigan yordamchisiz."},
+            {"role": "user", "content": (
+                "Berilgan matn asosida foydalanuvchi savoliga o'zbek tilida qisqa va aniq javob ber. "
+                "Faqat matndagi ma'lumotlardan foydalan, o'zing ma'lumot qo'shma. "
+                "Javob 3-5 gapdan oshmasin.\n\n"
+                f"Foydalanuvchi: {query}\n\n"
+                f"Matn: {context[:4000]}\n\n"
+                "Javob:"
+            )},
+        ]
         try:
-            resp = self.llm.chat([{"role": "user", "content": prompt}])
+            resp = await self.llm.chat_async(messages, timeout=60)
             return resp.strip()
         except Exception as e:
             log.error("Xulosa xatosi: %s", e)
