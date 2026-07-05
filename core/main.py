@@ -4,49 +4,102 @@ import string
 import sys
 import tempfile
 import signal
+import threading
+
+from core.logging import get_logger
 
 import numpy as np
 import soundfile as sf
 import sounddevice as sd
+import ollama
 
 from core.config import settings
-from core.router import route
+from core.dialog_state import DialogManager
+from core.rate_limiter import rate_limiter
+from core.router import match_intents, route
 from db.database import init_db, close_db
 from db.cache import close_redis, cache_llm_response, get_cached_llm_response
 from llm.memory import SessionMemory
 from llm.ollama import OllamaClient
 from llm.translator import Translator
+from skills.base import BaseSkill
+from skills.loader import SkillLoader
 from skills.search import SearchSkill
+from skills.email import EmailSkill
+from llm.persona import UserPersona
 from voice.stt import SpeechToText
 from voice.tts import TextToSpeech
+from voice.vad import VAD
 from voice.wake import WakeWordDetector
 
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-log = logging.getLogger("zari")
+log = get_logger("zari")
 
 
 class ZariPipeline:
     def __init__(self):
         self.stt = SpeechToText()
         self.tts = TextToSpeech()
-        self.llm = OllamaClient()
         self.memory = SessionMemory()
         self.wake = WakeWordDetector()
-        self.search_skill = SearchSkill()
-        self.translator = Translator() if settings.enable_translation else None
+        self.vad = VAD()
+        self.persona = UserPersona()
+        self.dialog = DialogManager()
+
+        self._ollama_client = ollama.Client(host=settings.ollama_url)
+        self.llm = OllamaClient(client=self._ollama_client)
+        self.translator = Translator(client=self._ollama_client) if settings.enable_translation else None
+
+        self._init_skills()
 
         self.audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
         self.text_queue: asyncio.Queue[str] = asyncio.Queue()
         self.response_queue: asyncio.Queue[str] = asyncio.Queue()
 
         self.running = False
+        self._wake_stop_event = threading.Event()
+
+    def _init_skills(self):
+        loader = SkillLoader()
+
+        self.search_skill = SearchSkill(llm=self.llm)
+        self.email_skill = EmailSkill(
+            smtp_host=getattr(settings, "smtp_host", ""),
+            smtp_port=getattr(settings, "smtp_port", 587),
+            smtp_username=getattr(settings, "smtp_username", ""),
+            smtp_password=getattr(settings, "smtp_password", ""),
+            smtp_use_tls=getattr(settings, "smtp_use_tls", True),
+            sender_address=getattr(settings, "sender_address", settings.email_address),
+            default_recipient=getattr(settings, "default_recipient", settings.email_address),
+        )
+
+        self._skill_map: dict[str, BaseSkill] = {
+            "search": self.search_skill,
+            "email": self.email_skill,
+        }
+
+        for name, instance in loader.instantiate_all().items():
+            if name not in ("search", "email"):
+                self._skill_map[name] = instance
+
+        log.info("Skills loaded: %s", ", ".join(sorted(self._skill_map.keys())))
+
+    def _get_skill(self, name: str) -> BaseSkill | None:
+        return self._skill_map.get(name)
+
+    async def _run_skill(self, skill: BaseSkill, text: str) -> str | None:
+        try:
+            result = await skill.execute_with_retry(text)
+            if result:
+                log.info("%s: %s", skill.__class__.__name__, result["response"])
+                return result["response"]
+        except Exception as e:
+            log.error("%s skill error: %s", skill.__class__.__name__, e)
+        return None
 
     async def init(self):
         await init_db()
+        await self.persona.ensure_table()
         await self.memory.init()
 
         if settings.enable_translation:
@@ -60,104 +113,244 @@ class ZariPipeline:
                 "Foydalanuvchiga doim o'zbek tilida, qisqa va aniq javob ber."
             )
 
+        persona_text = await self.persona.get_system_text()
+        if persona_text:
+            await self.memory.add("system", persona_text)
+            log.info("Persona context injected into memory")
+
     async def audio_worker(self):
         while self.running:
             try:
-                audio_data = await self.audio_queue.get()
-
-                tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-                audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-                sf.write(tmp.name, audio_array, self.wake.sample_rate)
-
-                text = await asyncio.to_thread(self.stt.transcribe, tmp.name)
-                log.info("STT: %s", repr(text))
-
-                if not text.strip():
-                    log.info("Bo'sh ovoz, tashlandi")
+                audio_data = await asyncio.wait_for(self.audio_queue.get(), timeout=1.0)
+                if not audio_data:
+                    log.debug("Empty audio data, skipping")
                     continue
 
-                words = text.strip().lower().split()
-                wake = settings.wake_word.lower()
-                words_clean = [w.strip(string.punctuation) for w in words]
+                if not self.vad.detect_speech(audio_data):
+                    log.debug("VAD: no speech detected, skipping")
+                    continue
 
-                if words_clean[0] == wake:
-                    command = " ".join(words[1:]).strip().strip(string.punctuation) or "salom"
-                    log.info("Wake word aniqlandi: '%s'", command)
-                    await self.text_queue.put(command)
-                elif wake in words_clean:
-                    idx = words_clean.index(wake)
-                    command = " ".join(words[idx + 1:]).strip().strip(string.punctuation) or "salom"
-                    log.info("Wake word (o'rtada): '%s'", command)
-                    await self.text_queue.put(command)
-                else:
-                    log.info("Wake word topilmadi, tashlandi")
+                try:
+                    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+                    audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+                    sf.write(tmp.name, audio_array, self.wake.sample_rate)
+
+                    text = await asyncio.to_thread(self.stt.transcribe, tmp.name)
+                    log.info("STT: %s", repr(text))
+
+                    if not text.strip():
+                        log.debug("Empty transcription, skipping")
+                        continue
+
+                    await self.text_queue.put(text.strip())
+                except Exception as e:
+                    log.error("Audio processing error: %s", e, exc_info=True)
+            except asyncio.TimeoutError:
+                continue
             except Exception as e:
-                log.error("audio_worker xatosi: %s", e, exc_info=True)
+                log.error("Audio worker error: %s", e, exc_info=True)
+
+    # === llm_worker helper methods ===
+
+    async def _handle_dialog(self, text: str) -> tuple[bool, str | None]:
+        if self.dialog.is_awaiting_confirm:
+            decision = self.dialog.handle_confirm_response(text)
+            if decision is True:
+                text = self.dialog.pending_text or text
+                intent = self.dialog.pending_intent or route(text)
+                self.dialog.reset()
+                return False, text
+            elif decision is False:
+                await self.response_queue.put("Bekor qilindi.")
+                self.dialog.reset()
+                return True, None
+            else:
+                await self.response_queue.put("Iltimos, ha yoki yo'q deb javob bering.")
+                return True, None
+
+        if self.dialog.is_active:
+            still_needed = self.dialog.add_param(text)
+            if still_needed:
+                await self.response_queue.put(still_needed)
+                return True, None
+            text = self.dialog.enriched_text()
+            intent = self.dialog.pending_intent or route(text)
+            self.dialog.reset()
+            return False, text
+
+        return False, text
+
+    async def _translate_input(self, text: str) -> str:
+        if not self.translator:
+            return text
+        try:
+            translated = await self.translator.uz_to_en_async(text)
+            log.info("UZ->EN: '%s' -> '%s'", text, translated)
+            return translated
+        except Exception as e:
+            log.error("Translation error: %s", e)
+            return text
+
+    async def _translate_output(self, response: str, skill_responded: bool) -> str:
+        if not self.translator or skill_responded:
+            return response
+        try:
+            translated = await self.translator.en_to_uz_async(response)
+            log.info("EN->UZ: '%s' -> '%s'", response, translated)
+            return translated
+        except Exception as e:
+            log.error("Output translation error: %s", e)
+            return response
+
+    async def _execute_skill_for_intent(self, intent: str, text: str) -> tuple[str | None, bool]:
+        skill = self._get_skill(intent)
+        if not skill:
+            return None, False
+
+        skill_name = skill.__class__.__name__
+        if getattr(skill, "requires_confirmation", False):
+            if not rate_limiter.is_allowed(skill_name):
+                await self.response_queue.put(
+                    f"Kechirasiz, {skill_name} juda tez-tez ishlatilyapti. "
+                    "Biroz kuting va qayta urinib ko'ring."
+                )
+                return None, True
+
+            question = self.dialog.begin_confirm(intent, text, skill)
+            await self.response_queue.put(question)
+            return None, True
+
+        if intent in ("music", "weather", "timer", "note", "search"):
+            if self.dialog.begin(intent, text):
+                question = self.dialog.next_question()
+                await self.response_queue.put(question)
+                return None, True
+
+        if intent == "search":
+            search_result = await self.search_skill.execute(text)
+            if search_result:
+                response = search_result["response"]
+                ctx = search_result.get("context", "")
+                src = search_result.get("source", "")
+                await self.memory.add("system", f"Internetdan topilgan ma'lumot ({src}): {ctx}")
+                log.info("Search (%s): %s", src, response)
+                return response, True
+        elif intent == "email":
+            email_result = await self.email_skill.execute(text)
+            if email_result:
+                response = email_result["response"]
+                log.info("Email: %s", response)
+                return response, True
+        elif intent == "workflow":
+            wf_skill = self._get_skill("n8n_workflow")
+            if wf_skill:
+                if not rate_limiter.is_allowed("N8nWorkflowSkill"):
+                    await self.response_queue.put(
+                        "Kechirasiz, workflow juda tez-tez ishga tushirilmoqda. Biroz kuting."
+                    )
+                    return None, True
+                wf_result = await wf_skill.execute(text)
+                if wf_result:
+                    response = wf_result["response"]
+                    ctx = wf_result.get("context", "")
+                    src = wf_result.get("source", "")
+                    await self.memory.add("system", f"N8N workflow ma'lumoti ({src}): {ctx}")
+                    log.info("Workflow: %s", response)
+                    return response, True
+        else:
+            response = await self._run_skill(skill, text)
+            if response:
+                return response, True
+
+        return None, False
+
+    async def _match_and_execute_skills(self, text: str) -> tuple[str | None, bool]:
+        for candidate_intent in match_intents(text):
+            response, responded = await self._execute_skill_for_intent(candidate_intent, text)
+            if responded:
+                return response, True
+            if response is not None:
+                return response, True
+        return None, False
+
+    async def _llm_fallback(self, llm_input: str) -> str:
+        for _ in range(2):
+            try:
+                cached = await get_cached_llm_response(llm_input)
+                if cached:
+                    log.info("LLM (cache): %s", cached)
+                    return cached
+
+                response = await asyncio.wait_for(
+                    self.llm.chat_async(self.memory.get(), timeout=60),
+                    timeout=65,
+                )
+                await cache_llm_response(llm_input, response)
+                log.info("LLM: %s", response)
+                return response
+            except asyncio.TimeoutError:
+                log.error("LLM timeout")
+                return "Kechirasiz, javob bermay ketib qoldi. Iltimos, boshqatdan harakat qiling."
+            except Exception as e:
+                log.error("LLM error: %s", e, exc_info=True)
+                return "Kechirasiz, hozir javob bera olmayman."
+
+        return "Kechirasiz, javob berolmayman."
 
     async def llm_worker(self):
         while self.running:
             try:
-                text = await self.text_queue.get()
+                text = await asyncio.wait_for(self.text_queue.get(), timeout=1.0)
+
+                skip, processed = await self._handle_dialog(text)
+                if skip:
+                    continue
+                if processed is not None:
+                    text = processed
+
                 intent = route(text)
-                log.info("Intent: %s", intent)
+                log.info("Intent: %s | Text: %s", intent, text[:60])
 
-                llm_input = text
-                if self.translator:
-                    llm_input = await asyncio.to_thread(self.translator.uz_to_en, text)
-                    log.info("UZ->EN: '%s' -> '%s'", text, llm_input)
-
+                llm_input = await self._translate_input(text)
                 await self.memory.add("user", llm_input)
 
-                if intent == "search":
-                    search_result = await self.search_skill.execute(text)
-                    if search_result:
-                        response = search_result["response"]
-                        context = search_result["context"]
-                        source = search_result["source"]
-                        await self.memory.add(
-                            "system",
-                            f"Internetdan topilgan ma'lumot ({source}): {context}",
-                        )
-                        log.info("Search (%s): %s", source, response)
-                    else:
-                        log.info("Search natija topmadi, LLM ga o'tiladi")
-                        response = None
-                else:
-                    response = None
+                if not self.dialog.is_active and not self.dialog.is_awaiting_confirm:
+                    asyncio.create_task(self.persona.extract_from_conversation(text, self.llm))
 
-                if response is None:
-                    try:
-                        cached = await get_cached_llm_response(llm_input)
-                        if cached:
-                            response = cached
-                            log.info("LLM (cache): %s", response)
-                        else:
-                            response = await asyncio.to_thread(self.llm.chat, self.memory.get())
-                            await cache_llm_response(llm_input, response)
-                            log.info("LLM: %s", response)
-                    except Exception as e:
-                        log.error("LLM xatosi (Ollama ishlayaptimi?): %s", e, exc_info=True)
-                        response = "Kechirasiz, hozir javob bera olmayman. Ollama bilan bog'liq muammo bor."
+                response, skill_responded = await self._match_and_execute_skills(text)
+
+                if response is None and not skill_responded:
+                    response = await self._llm_fallback(llm_input)
+
+                if not response:
+                    response = "Kechirasiz, javob berolmayman."
 
                 await self.memory.add("assistant", response)
 
-                output = response
-                if self.translator:
-                    output = await asyncio.to_thread(self.translator.en_to_uz, response)
-                    log.info("EN->UZ: '%s' -> '%s'", response, output)
-
+                output = await self._translate_output(response, skill_responded)
                 await self.response_queue.put(output)
+            except asyncio.TimeoutError:
+                continue
             except Exception as e:
                 log.error("llm_worker xatosi: %s", e, exc_info=True)
 
     async def tts_worker(self):
         while self.running:
             try:
-                response = await self.response_queue.get()
-                log.info("TTS: %s", response)
-                await self.tts.speak(response)
+                response = await asyncio.wait_for(self.response_queue.get(), timeout=1.0)
+                if not response or not response.strip():
+                    log.warning("Empty response from LLM, skipping TTS")
+                    continue
+
+                try:
+                    log.info("TTS: %s", response[:100])
+                    await self.tts.speak(response)
+                except Exception as e:
+                    log.error("TTS speak error: %s", e, exc_info=True)
+            except asyncio.TimeoutError:
+                continue
             except Exception as e:
-                log.error("TTS xatosi: %s", e, exc_info=True)
+                log.error("TTS worker error: %s", e, exc_info=True)
 
     async def wake_loop(self):
         if self.wake.device is None:
@@ -165,32 +358,81 @@ class ZariPipeline:
             return
 
         log.info("'%s' so'zi kutilmoqda (%d Hz)...", settings.wake_word.capitalize(), self.wake.sample_rate)
+        self._wake_stop_event.clear()
         while self.running:
             try:
-                audio_data = await asyncio.to_thread(self.wake.wait_for_speech)
+                audio_data = await asyncio.to_thread(self.wake.wait_for_speech, timeout=1.0, stop_event=self._wake_stop_event)
                 if audio_data:
                     log.info("Ovoz aniqlandi!")
                     await self.audio_queue.put(audio_data)
-                else:
-                    log.debug("wait_for_speech None qaytardi (davom etiladi)")
             except Exception as e:
                 log.error("Wake loop xatosi: %s", e, exc_info=True)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
 
     async def start(self):
         self.running = True
-        workers = [
-            asyncio.create_task(self.wake_loop()),
-            asyncio.create_task(self.audio_worker()),
-            asyncio.create_task(self.llm_worker()),
-            asyncio.create_task(self.tts_worker()),
+
+        async def _spawn(worker_coro, name: str):
+            while self.running:
+                task = asyncio.create_task(worker_coro())
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    log.info("%s cancelled", name)
+                    break
+                except Exception as e:
+                    log.error("Worker %s crashed: %s", name, e, exc_info=True)
+                    await asyncio.sleep(1)
+                else:
+                    log.info("Worker %s exited cleanly, restarting...", name)
+                    await asyncio.sleep(0.5)
+
+        self._supervisors = [
+            asyncio.create_task(_spawn(self.wake_loop, "wake_loop")),
+            asyncio.create_task(_spawn(self.audio_worker, "audio_worker")),
+            asyncio.create_task(_spawn(self.llm_worker, "llm_worker")),
+            asyncio.create_task(_spawn(self.tts_worker, "tts_worker")),
         ]
-        log.info("Zari ishga tushdi")
-        await asyncio.gather(*workers)
+
+        log.info("Zari ishga tushdi (supervised)")
+
+        try:
+            await asyncio.gather(*self._supervisors)
+        finally:
+            self.running = False
+            for s in getattr(self, "_supervisors", []):
+                s.cancel()
 
     async def stop(self):
         self.running = False
+        self._wake_stop_event.set()
+        log.info("Zari shutdown requested")
+
+        supervisors = getattr(self, "_supervisors", [])
+        for s in supervisors:
+            try:
+                s.cancel()
+            except Exception:
+                pass
+
+        if supervisors:
+            try:
+                await asyncio.wait_for(asyncio.gather(*supervisors, return_exceptions=True), timeout=5)
+            except asyncio.TimeoutError:
+                log.warning("Timeout waiting for supervisor tasks to exit")
+
+        await self._drain_queues(timeout=3)
         log.info("Zari to'xtadi")
+
+    async def _drain_queues(self, timeout: float = 3.0) -> None:
+        end = asyncio.get_event_loop().time() + timeout
+        queues = [self.audio_queue, self.text_queue, self.response_queue]
+        for q in queues:
+            try:
+                while not q.empty() and asyncio.get_event_loop().time() < end:
+                    await asyncio.sleep(0.05)
+            except Exception as e:
+                log.debug("Error while draining queue: %s", e)
 
 
 def test_mic():
