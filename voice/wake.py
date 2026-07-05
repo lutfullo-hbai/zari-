@@ -1,5 +1,6 @@
 import collections
 import logging
+import threading
 
 import webrtcvad
 import sounddevice as sd
@@ -10,23 +11,43 @@ from core.config import settings
 
 log = logging.getLogger("zari")
 
+try:
+    from openwakeword import Model
+    HAS_OPENWAKEWORD = True
+except ImportError:
+    HAS_OPENWAKEWORD = False
+
 
 class WakeWordDetector:
-    # webrtcvad qo'llaydigan sample rate'lar
     _VAD_RATES = (48000, 32000, 16000)
 
     def __init__(self):
-        self.vad = webrtcvad.Vad(1)  # low aggressiveness (with transient skip + robust counter)
+        self.vad = webrtcvad.Vad(1)
         self.frame_ms = 30
-
         self.sample_rate = 16000
         self.frame_samples = int(self.sample_rate * self.frame_ms / 1000)
         self.frame_size = self.frame_samples * 2
-
         self.energy_threshold = 5
-        self.speech_frames_needed = 8    # 240ms sustained VAD
-        self.startup_frames = 10         # skip first 300ms transient
+        self.speech_frames_needed = 8
+        self.startup_frames = 10
         self.device = self._find_input_device()
+
+        self._oww_model = None
+        self._wake_threshold = 0.5
+        if HAS_OPENWAKEWORD:
+            try:
+                model_paths = getattr(settings, "wake_word_models", None)
+                if model_paths:
+                    self._oww_model = Model(wakeword_models=model_paths)
+                else:
+                    self._oww_model = Model(wakeword_models=["hey_jarvis"])
+                self._wake_threshold = getattr(settings, "wake_threshold", 0.5)
+                log.info(
+                    "OpenWakeWord: loaded (threshold=%.2f)",
+                    self._wake_threshold,
+                )
+            except Exception as e:
+                log.warning("OpenWakeWord init failed: %s", e)
 
     def _find_input_device(self) -> int | None:
         preferred = settings.audio_input_device
@@ -54,12 +75,9 @@ class WakeWordDetector:
         for i, dev in enumerate(devices):
             if dev["max_input_channels"] == 0:
                 continue
-
             native_sr = int(dev.get("default_samplerate", 0)) if dev.get("default_samplerate") else 0
-
             rates = [native_sr] if native_sr in self._VAD_RATES else []
             rates += [r for r in self._VAD_RATES if r != native_sr]
-
             for sr in rates:
                 try:
                     sd.check_input_settings(device=i, samplerate=sr)
@@ -91,7 +109,57 @@ class WakeWordDetector:
     def _rms(self, audio: np.ndarray) -> float:
         return float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
 
-    def wait_for_speech(self, timeout: float = 60.0) -> bytes | None:
+    def wait_for_speech(
+        self, timeout: float = 60.0, stop_event: threading.Event | None = None
+    ) -> bytes | None:
+        if self._oww_model is not None:
+            return self._wait_for_wakeword(timeout, stop_event)
+        return self._wait_for_vad(timeout, stop_event)
+
+    def _wait_for_wakeword(
+        self, timeout: float, stop_event: threading.Event | None
+    ) -> bytes | None:
+        buffer = collections.deque(maxlen=50)
+        total_blocks = int(timeout * 1000 / self.frame_ms)
+        frame_idx = 0
+
+        try:
+            with sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="int16",
+                device=self.device,
+                blocksize=self.frame_samples,
+            ) as stream:
+                for _ in range(total_blocks):
+                    if stop_event and stop_event.is_set():
+                        return None
+
+                    frame_idx += 1
+                    audio, _ = stream.read(self.frame_samples)
+                    audio_bytes = audio.tobytes()
+                    buffer.append(audio.copy())
+
+                    if frame_idx <= self.startup_frames:
+                        continue
+
+                    prediction = self._oww_model.predict(audio_bytes)
+                    wake_score = prediction.get("hey_jarvis", 0)
+
+                    if wake_score > self._wake_threshold:
+                        log.info(
+                            "Wake word detected (score=%.3f, threshold=%.2f)",
+                            wake_score,
+                            self._wake_threshold,
+                        )
+                        return self._record_command(stream, list(buffer))
+        except Exception as e:
+            log.error("OpenWakeWord error: %s", e)
+        return None
+
+    def _wait_for_vad(
+        self, timeout: float, stop_event: threading.Event | None
+    ) -> bytes | None:
         buffer = collections.deque(maxlen=50)
         speech_count = 0
         total_blocks = int(timeout * 1000 / self.frame_ms)
@@ -107,8 +175,10 @@ class WakeWordDetector:
                 blocksize=self.frame_samples,
             ) as stream:
                 for _ in range(total_blocks):
-                    frame_idx += 1
+                    if stop_event and stop_event.is_set():
+                        return None
 
+                    frame_idx += 1
                     audio, _ = stream.read(self.frame_samples)
                     audio_bytes = audio.tobytes()
                     buffer.append(audio.copy())
@@ -128,14 +198,12 @@ class WakeWordDetector:
                     if len(audio_bytes) >= self.frame_size and self.vad.is_speech(audio_bytes, self.sample_rate):
                         speech_count += 1
                         if speech_count >= self.speech_frames_needed:
-                            log.info("Nutq aniqlandi (frames=%d, RMS=%.1f)", speech_count, rms)
+                            log.info("Nutq aniqlandi (VAD fallback, frames=%d, RMS=%.1f)", speech_count, rms)
                             return self._record_command(stream, list(buffer))
                     else:
                         speech_count = max(0, speech_count - 1)
         except Exception as e:
-            log.error("Mikrofon xatosi: %s", e)
-            return None
-
+            log.error("VAD error: %s", e)
         return None
 
     def _record_command(self, stream: sd.InputStream, buffer: list[np.ndarray]) -> bytes:
@@ -143,7 +211,9 @@ class WakeWordDetector:
         silence_frames = 0
         max_silence = int(2.0 * 1000 / self.frame_ms)
         max_frames = int(15.0 * 1000 / self.frame_ms)
-        rms_threshold = self.energy_threshold * 30
+
+        noise_floor = max([self._rms(f) for f in list(buffer)[:3]]) or 1
+        rms_threshold = max(noise_floor * 3, self.energy_threshold * 50)
 
         for _ in range(max_frames):
             audio, _ = stream.read(self.frame_samples)

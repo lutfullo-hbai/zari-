@@ -18,6 +18,4 @@ class SpeechToText:
         log.debug("Whisper detected language: %s (probability %.2f)", info.language, info.language_probability)
         return " ".join(seg.text for seg in segments).strip()
 
-    def transcribe_array(self, audio_array, sr: int = 16000) -> str:
-        segments, _ = self.model.transcribe(audio_array, beam_size=1, language=self.language or None)
-        return " ".join(seg.text for seg in segments).strip()
+
