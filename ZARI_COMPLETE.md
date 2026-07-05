@@ -292,16 +292,16 @@ README da `tests/` papkasi bor, lekin testlar haqida hech narsa yo'q.
 
 ---
 
-### Milestone 2 — Qidiruv va Bilim (2 hafta)
+### Milestone 2 — Qidiruv va Bilim (2 hafta) ✅
 
 **Maqsad:** Zari internetdan ma'lumot topadi va tahlil qiladi.
 
-- [ ] DuckDuckGo / SerpAPI orqali qidiruv
-- [ ] Veb sahifani o'qish va xulosalash
-- [ ] Ilmiy manbalardan (Wikipedia, PubMed) ma'lumot olish
-- [ ] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
-- [ ] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
-- [ ] Test: qidiruv, xulosa, intent detection
+- [x] DuckDuckGo / SerpAPI orqali qidiruv
+- [x] Veb sahifani o'qish va xulosalash
+- [x] Ilmiy manbalardan (Wikipedia) ma'lumot olish
+- [x] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
+- [x] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
+- [x] Test: qidiruv, xulosa, intent detection
 
 **Natija:** Har qanday savolga fact-based javob beradi.
 
@@ -562,7 +562,7 @@ tests/
 |----------|------|-----------|
 | 🔴 Critical | Foundation (requirements, .env, Docker, tests) | M0 |
 | 🔴 Critical | Voice pipeline (wake, STT, LLM, TTS) | M1 |
-| 🟡 High | Search va intent detection | M2 |
+| 🟢 Medium | Search va intent detection | M2 ✅ |
 | 🟡 High | Skills tizimi va plugin loader | M3 |
 | 🟢 Medium | Web UI va REST API | M3.5 |
 | 🟢 Medium | Uzoq muddatli xotira | M4 |

@@ -37,7 +37,8 @@ zari/
 ├── core/                    # 1-QATLAM: Asosiy loop va yo'naltirish
 │   ├── main.py              # Wake word eshitish, asosiy loop
 │   ├── config.py            # .env asosida konfiguratsiya
-│   └── router.py            # Niyat → modul yo'naltirish
+│   ├── router.py            # Niyat → modul yo'naltirish (priority)
+│   └── brain.py             # Agent Brain: Decision Engine + State Machine
 ├── voice/                   # 2-QATLAM: Ovoz bilan ishlash
 │   ├── wake.py              # "Zari" so'zini aniqlash (Porcupine/Vosk)
 │   ├── stt.py               # Ovoz → matn (Whisper local)
@@ -228,31 +229,35 @@ Zari [12factor.net](https://12factor.net/) tamoyillariga asoslanib quriladi:
 
 ---
 
-### Milestone 2 — Qidiruv va Bilim (2 hafta)
+### Milestone 2 — Qidiruv va Bilim (2 hafta) ✅
 
 **Maqsad:** Zari internetdan ma'lumot topadi va tahlil qiladi.
 
-- [ ] DuckDuckGo / SerpAPI orqali qidiruv
-- [ ] Veb sahifani o'qish va xulosalash
-- [ ] Ilmiy manbalardan (Wikipedia, PubMed) ma'lumot olish
-- [ ] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
-- [ ] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
-- [ ] Test: qidiruv, xulosa, intent detection
+- [x] DuckDuckGo / SerpAPI orqali qidiruv
+- [x] Veb sahifani o'qish va xulosalash
+- [x] Ilmiy manbalardan (Wikipedia) ma'lumot olish
+- [x] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
+- [x] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
+- [x] Test: qidiruv, xulosa, intent detection
 
 **Natija:** Har qanday savolga fact-based javob beradi.
 
 ---
 
-### Milestone 3 — Skills Tizimi (3 hafta)
+### Milestone 3 — Skills va Router Tizimi (3 hafta)
 
-**Maqsad:** Zari amaliy vazifalarni bajaradi.
+**Maqsad:** Zari amaliy vazifalarni bajaradi va xavfsiz boshqaradi.
 
+- [ ] Intent priority tizimi (system → music → finance → search → chat)
+- [ ] Tool parameter validation — required/optional params tekshirish
+- [ ] Async retry + timeout — har bir skill uchun alohida
+- [ ] Safety confirmation — xavfli buyruqlarni tasdiqlatish
 - [ ] YouTube dan musiqa qidirish va link berish
 - [ ] Valyuta va oltin narxlarini scraping qilish
 - [ ] 5 yillik narx grafigi chiqarish (matplotlib)
 - [ ] Tahlil va xulosa aytish
 - [ ] Fayl yuklab olish (yt-dlp)
-- [ ] BaseSkill — yangi skill qo'shish oson bo'lsin
+- [ ] BaseSkill — priority, timeout, fallback maydonlari bilan
 - [ ] Plugin loader — skill'larni dinamik yuklash
 - [ ] Skill'lar uchun testlar
 
@@ -276,10 +281,13 @@ Zari [12factor.net](https://12factor.net/) tamoyillariga asoslanib quriladi:
 
 ---
 
-### Milestone 4 — Xotira va O'rganish (3 hafta)
+### Milestone 4 — Dialog, Xotira va O'rganish (4 hafta)
 
-**Maqsad:** Zari seni o'rganib boradi.
+**Maqsad:** Zari kontekstli dialog yuritadi va seni o'rganib boradi.
 
+- [ ] Multi-turn dialog — "Musiqa qo'y" → "Qanday musiqa?" → "Jazz"
+- [ ] Conversation state machine — IDLE → AWAITING_PARAM → EXECUTING
+- [ ] N-turn conversation memory — so'nggi 5 ta xabar konteksti
 - [ ] Uzun muddatli xotira (ChromaDB — local vector DB)
 - [ ] Foydalanuvchi profili — qiziqishlar, fikrlash uslubi, odatlar
 - [ ] "Sen doim ertalab ishlay olmasang" — o'zi sezadi
@@ -291,10 +299,12 @@ Zari [12factor.net](https://12factor.net/) tamoyillariga asoslanib quriladi:
 
 ---
 
-### Milestone 5 — Xabar va Avtomatlashtirish (2 hafta)
+### Milestone 5 — Agent Brain va Avtomatlashtirish (4 hafta)
 
-**Maqsad:** Zari sening nomingdan harakat qiladi.
+**Maqsad:** Zari mustaqil qaror qabul qiladigan agent arxitekturasiga o'tadi.
 
+- [ ] Agent Brain arxitekturasi: NLU → Router → Tool Executor → LLM → Response
+- [ ] Decision Engine — qaysi tool kerak, qanday parametrlar bilan
 - [ ] Telegram xabar yuborish
 - [ ] Email yuborish
 - [ ] Vaqt asosida avtomatik vazifalar — "soat 8 da Oybek ga xabar yubor"
@@ -386,10 +396,10 @@ tests/
 | 🔴 Critical | Foundation (requirements, .env, Docker, tests) | M0 |
 | 🔴 Critical | Voice pipeline (wake, STT, LLM, TTS) | M1 |
 | 🟡 High | Search va intent detection | M2 |
-| 🟡 High | Skills tizimi va plugin loader | M3 |
+| 🟡 High | Skills tizimi, router priority, safety | M3 |
 | 🟢 Medium | Web UI va REST API | M3.5 |
-| 🟢 Medium | Uzoq muddatli xotira | M4 |
-| 🔵 Low | Messaging va scheduler | M5 |
+| 🟢 Medium | Dialog, xotira, conversation state | M4 |
+| 🔵 Low | Agent Brain, messaging, scheduler | M5 |
 | 🔵 Low | Multi-agent sistema | M6 |
 | ⚪ Future | Vision, OS integration, mobile | M7 |
 

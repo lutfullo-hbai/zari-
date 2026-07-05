@@ -97,16 +97,16 @@ zari/
 
 ---
 
-### Milestone 2 — Qidiruv va Bilim
+### Milestone 2 — Qidiruv va Bilim ✅
 **Muddat: 2 hafta**
 
 **Maqsad:** Zari internetdan ma'lumot topadi va tahlil qiladi.
 
-- [ ] DuckDuckGo / SerpAPI orqali qidiruv
-- [ ] Veb sahifani o'qish va xulosalash
-- [ ] Ilmiy manbalardan (Wikipedia, PubMed) ma'lumot olish
-- [ ] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
-- [ ] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
+- [x] DuckDuckGo / SerpAPI orqali qidiruv
+- [x] Veb sahifani o'qish va xulosalash
+- [x] Ilmiy manbalardan (Wikipedia) ma'lumot olish
+- [x] "Alzheimer kasalligi nima?" → internetdan o'qib, tahlil qilib, ovoz bilan tushuntiradi
+- [x] Niyat aniqlash (Intent detection) — qidiruv, suhbat, buyruq farqlash
 
 **Natija:** Har qanday savolga fact-based javob beradi.
 
@@ -228,7 +228,45 @@ WAKE_WORD=zari
 TTS_VOICE=uz-UZ-MadinaNeural
 TELEGRAM_TOKEN=
 EMAIL_ADDRESS=
+
+# Qidiruv backend'i
+SEARCH_BACKEND=auto
+PERPLEXICA_URL=http://localhost:3000
 ```
+
+### SMTP / Email
+
+If you want Zari to send email via SMTP (used by `skills/email.py`), add:
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your_smtp_user
+SMTP_PASSWORD=your_smtp_password
+SMTP_USE_TLS=true
+SENDER_ADDRESS=from@example.com
+DEFAULT_RECIPIENT=to@example.com
+```
+
+For Gmail API / OAuth flow (recommended for production using Gmail), see the `EMAIL` task in `FUTURE_PLAN.md` for steps.
+
+### Perplexica bilan qidiruv
+
+Agar Perplexica ni mahalliy server sifatida ishga tushirsangiz, quyidagi buyruq bilan boshlang:
+
+```bash
+cd Perplexica
+docker compose up -d
+```
+
+So'ngra loyiha `.env` faylida:
+
+```env
+SEARCH_BACKEND=perplexica
+PERPLEXICA_URL=http://localhost:3000
+```
+
+Agar `SEARCH_BACKEND=auto`, loyiha avval Perplexica ni sinab ko'radi, bo'lmasa eski fallback qidiruvga o'tadi.
 
 ---
 
