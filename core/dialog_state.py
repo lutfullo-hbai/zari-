@@ -104,8 +104,8 @@ class DialogManager:
         if not self.remaining_params:
             self.reset()
             return None
-        self.remaining_params.pop(0)
-        self.collected_params[value] = value
+        param_name = self.remaining_params.pop(0)
+        self.collected_params[param_name] = value
         if self.remaining_params:
             return self.next_question()
         return None

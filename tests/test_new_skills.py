@@ -145,8 +145,9 @@ class TestWeatherSkill:
         old = settings.weather_api_key
         settings.weather_api_key = ""
         skill = WeatherSkill()
-        result = await skill.execute("salom")
-        assert result is None
+        with patch.object(skill, '_weather_via_web', return_value=None):
+            result = await skill.execute("salom")
+            assert result is None
         settings.weather_api_key = old
 
     @pytest.mark.asyncio
@@ -223,6 +224,21 @@ class TestFileManagerSkill:
         skill = FileManagerSkill()
         result = await skill.execute("salom")
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_read_file_with_natural_language_path(self, tmp_path):
+        from skills.filemanager import FileManagerSkill
+
+        file_path = tmp_path / "demo.txt"
+        file_path.write_text("hello world", encoding="utf-8")
+
+        skill = FileManagerSkill()
+        result = await skill.execute(f"faylni och {file_path}")
+
+        assert result is not None
+        assert result["source"] == "filemanager"
+        assert "demo.txt" in result["response"]
+        assert "hello world" in result["response"]
 
 
 class TestNetworkSkill:

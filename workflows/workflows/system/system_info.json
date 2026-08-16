@@ -1,0 +1,55 @@
+{
+  "name": "Tizim ma'lumotlari",
+  "description": "CPU, RAM, disk va OS haqida ma'lumot beradi",
+  "trigger_type": "Manual",
+  "complexity": "low",
+  "integrations": ["System", "OS"],
+  "tags": ["sistema", "system", "cpu", "ram", "disk", "info"],
+  "nodes": [
+    {
+      "id": "node-1",
+      "name": "CPU ma'lumoti",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "command": "cat /proc/cpuinfo | grep 'model name' | head -1",
+        "executeIn": "command"
+      }
+    },
+    {
+      "id": "node-2",
+      "name": "RAM ma'lumoti",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [300, 300],
+      "parameters": {
+        "command": "free -h | grep Mem",
+        "executeIn": "command"
+      }
+    },
+    {
+      "id": "node-3",
+      "name": "Disk ma'lumoti",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "parameters": {
+        "command": "df -h / | tail -1",
+        "executeIn": "command"
+      }
+    }
+  ],
+  "connections": {
+    "CPU ma'lumoti": {
+      "main": [
+        [{ "node": "RAM ma'lumoti", "type": "main", "index": 0 }]
+      ]
+    },
+    "RAM ma'lumoti": {
+      "main": [
+        [{ "node": "Disk ma'lumoti", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

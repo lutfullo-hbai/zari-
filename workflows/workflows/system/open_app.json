@@ -1,0 +1,22 @@
+  {
+    "name": "Ilova ochish",
+    "description": "Belgilangan dasturni ochadi yoki yopadi",
+    "trigger_type": "Manual",
+    "complexity": "low",
+    "integrations": ["System", "OS"],
+    "tags": ["och", "open", "yop", "close", "ilova", "app", "dastur"],
+    "nodes": [
+      {
+        "id": "node-1",
+        "name": "Ilovani ishga tushirish",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [0, 300],
+        "parameters": {
+          "command": "={{ $json[\"app\"] }}",
+          "executeIn": "command"
+        }
+      }
+    ],
+    "connections": {}
+  }

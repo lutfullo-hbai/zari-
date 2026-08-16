@@ -1,14 +1,15 @@
 import importlib
 import inspect
+import logging
 import pkgutil
 from pathlib import Path
 
 from skills.base import BaseSkill
 
+log = logging.getLogger("zari")
+
 
 class SkillLoader:
-    """Load concrete skills from the skills package dynamically."""
-
     def __init__(self, package_name: str = "skills"):
         self.package_name = package_name
 
@@ -42,6 +43,6 @@ class SkillLoader:
         for name, skill_cls in self.discover().items():
             try:
                 instances[name] = skill_cls()
-            except Exception:
-                continue
+            except Exception as e:
+                log.warning("Skill '%s' yuklanmadi: %s", name, e)
         return instances

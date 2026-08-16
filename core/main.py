@@ -5,13 +5,13 @@ import sys
 import tempfile
 import signal
 import threading
+from pathlib import Path
 
 from core.logging import get_logger
 
 import numpy as np
 import soundfile as sf
 import sounddevice as sd
-import ollama
 
 from core.config import settings
 from core.dialog_state import DialogManager
@@ -19,8 +19,8 @@ from core.rate_limiter import rate_limiter
 from core.router import match_intents, route
 from db.database import init_db, close_db
 from db.cache import close_redis, cache_llm_response, get_cached_llm_response
+from llm.factory import create_llm_client
 from llm.memory import SessionMemory
-from llm.ollama import OllamaClient
 from llm.translator import Translator
 from skills.base import BaseSkill
 from skills.loader import SkillLoader
@@ -46,9 +46,8 @@ class ZariPipeline:
         self.persona = UserPersona()
         self.dialog = DialogManager()
 
-        self._ollama_client = ollama.Client(host=settings.ollama_url)
-        self.llm = OllamaClient(client=self._ollama_client)
-        self.translator = Translator(client=self._ollama_client) if settings.enable_translation else None
+        self.llm = create_llm_client()
+        self.translator = Translator(client=self.llm) if settings.enable_translation else None
 
         self._init_skills()
 
@@ -58,6 +57,8 @@ class ZariPipeline:
 
         self.running = False
         self._wake_stop_event = threading.Event()
+        self._tts_is_speaking = threading.Event()
+        self._wake_cooldown = 3.0
 
     def _init_skills(self):
         loader = SkillLoader()
@@ -102,16 +103,20 @@ class ZariPipeline:
         await self.persona.ensure_table()
         await self.memory.init()
 
-        if settings.enable_translation:
-            await self.memory.system(
-                "You are Zari — a personal AI assistant. You speak in English. "
-                "Keep responses short, clear, and helpful."
-            )
-        else:
-            await self.memory.system(
-                "Sen Zari — o'zbek tilida gapiradigan shaxsiy AI yordamchi. "
-                "Foydalanuvchiga doim o'zbek tilida, qisqa va aniq javob ber."
-            )
+        await self.memory.system(
+            "Sen Zari — o'zbek tilida gapiradigan shaxsiy AI yordamchi. "
+            "Sen Zari'san, Jervis, Cortana yoki boshqa hech qanday AI EMAS. "
+            "Hech qachon o'zini boshqa AI deb atama.\n\n"
+            "MUHIM QOIDALAR:\n"
+            "1. Doim o'zbek tilida, qisqa va aniq javob ber.\n"
+            "2. Agar so'z noto'g'ri tushungan bo'lsa, qayta so'ra: 'Men tushunmadim, qaytadan ayting'\n"
+            "3. Hech qachon o'ylab chiqarilgan (hallucination) ma'lumot bermaslik. "
+            "Agar bilmasang, 'Bilmayman' yoki 'Aniq ma'lumotim yo'q' deb aytil.\n"
+            "4. Noto'g'ri transkripsiyani to'g'irlashga harakat qil. "
+            "Masalan: 'enxte' → 'Einstein', 'telefram' → 'Telegram' bo'lishi mumkin.\n"
+            "5. Faqat aniq, ishonchli ma'lumot ber. Shubhali bo'lsa, foydalanuvchidan qayta so'ra.\n"
+            "6. Uzoq va murakkab javob bermaslik. Qisqa va tushunarli javob ber."
+        )
 
         persona_text = await self.persona.get_system_text()
         if persona_text:
@@ -126,10 +131,11 @@ class ZariPipeline:
                     log.debug("Empty audio data, skipping")
                     continue
 
-                if not self.vad.detect_speech(audio_data):
+                if not self.vad.detect_speech(audio_data, self.wake.sample_rate):
                     log.debug("VAD: no speech detected, skipping")
                     continue
 
+                tmp = None
                 try:
                     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
                     audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
@@ -145,6 +151,12 @@ class ZariPipeline:
                     await self.text_queue.put(text.strip())
                 except Exception as e:
                     log.error("Audio processing error: %s", e, exc_info=True)
+                finally:
+                    if tmp is not None:
+                        try:
+                            Path(tmp.name).unlink()
+                        except Exception:
+                            pass
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
@@ -152,33 +164,33 @@ class ZariPipeline:
 
     # === llm_worker helper methods ===
 
-    async def _handle_dialog(self, text: str) -> tuple[bool, str | None]:
+    async def _handle_dialog(self, text: str) -> tuple[bool, str | None, str | None]:
         if self.dialog.is_awaiting_confirm:
             decision = self.dialog.handle_confirm_response(text)
             if decision is True:
                 text = self.dialog.pending_text or text
                 intent = self.dialog.pending_intent or route(text)
                 self.dialog.reset()
-                return False, text
+                return False, text, intent
             elif decision is False:
                 await self.response_queue.put("Bekor qilindi.")
                 self.dialog.reset()
-                return True, None
+                return True, None, None
             else:
                 await self.response_queue.put("Iltimos, ha yoki yo'q deb javob bering.")
-                return True, None
+                return True, None, None
 
         if self.dialog.is_active:
             still_needed = self.dialog.add_param(text)
             if still_needed:
                 await self.response_queue.put(still_needed)
-                return True, None
+                return True, None, None
             text = self.dialog.enriched_text()
             intent = self.dialog.pending_intent or route(text)
             self.dialog.reset()
-            return False, text
+            return False, text, intent
 
-        return False, text
+        return False, text, None
 
     async def _translate_input(self, text: str) -> str:
         if not self.translator:
@@ -203,6 +215,43 @@ class ZariPipeline:
             return response
 
     async def _execute_skill_for_intent(self, intent: str, text: str) -> tuple[str | None, bool]:
+        if intent == "search":
+            search_result = await self.search_skill.execute(text)
+            if search_result:
+                response = search_result["response"]
+                ctx = search_result.get("context", "")
+                src = search_result.get("source", "")
+                await self.memory.add("system", f"Internetdan topilgan ma'lumot ({src}): {ctx}")
+                log.info("Search (%s): %s", src, response)
+                return response, True
+            return None, False
+
+        if intent == "email":
+            email_result = await self.email_skill.execute(text)
+            if email_result:
+                response = email_result["response"]
+                log.info("Email: %s", response)
+                return response, True
+            return None, False
+
+        if intent == "workflow":
+            wf_skill = self._get_skill("n8n_workflow")
+            if wf_skill:
+                if not rate_limiter.is_allowed("N8nWorkflowSkill"):
+                    await self.response_queue.put(
+                        "Kechirasiz, workflow juda tez-tez ishga tushirilmoqda. Biroz kuting."
+                    )
+                    return None, True
+                wf_result = await wf_skill.execute(text)
+                if wf_result:
+                    response = wf_result["response"]
+                    ctx = wf_result.get("context", "")
+                    src = wf_result.get("source", "")
+                    await self.memory.add("system", f"N8N workflow ma'lumoti ({src}): {ctx}")
+                    log.info("Workflow: %s", response)
+                    return response, True
+            return None, False
+
         skill = self._get_skill(intent)
         if not skill:
             return None, False
@@ -220,47 +269,15 @@ class ZariPipeline:
             await self.response_queue.put(question)
             return None, True
 
-        if intent in ("music", "weather", "timer", "note", "search"):
+        if intent in ("music", "weather", "timer", "note"):
             if self.dialog.begin(intent, text):
                 question = self.dialog.next_question()
                 await self.response_queue.put(question)
                 return None, True
 
-        if intent == "search":
-            search_result = await self.search_skill.execute(text)
-            if search_result:
-                response = search_result["response"]
-                ctx = search_result.get("context", "")
-                src = search_result.get("source", "")
-                await self.memory.add("system", f"Internetdan topilgan ma'lumot ({src}): {ctx}")
-                log.info("Search (%s): %s", src, response)
-                return response, True
-        elif intent == "email":
-            email_result = await self.email_skill.execute(text)
-            if email_result:
-                response = email_result["response"]
-                log.info("Email: %s", response)
-                return response, True
-        elif intent == "workflow":
-            wf_skill = self._get_skill("n8n_workflow")
-            if wf_skill:
-                if not rate_limiter.is_allowed("N8nWorkflowSkill"):
-                    await self.response_queue.put(
-                        "Kechirasiz, workflow juda tez-tez ishga tushirilmoqda. Biroz kuting."
-                    )
-                    return None, True
-                wf_result = await wf_skill.execute(text)
-                if wf_result:
-                    response = wf_result["response"]
-                    ctx = wf_result.get("context", "")
-                    src = wf_result.get("source", "")
-                    await self.memory.add("system", f"N8N workflow ma'lumoti ({src}): {ctx}")
-                    log.info("Workflow: %s", response)
-                    return response, True
-        else:
-            response = await self._run_skill(skill, text)
-            if response:
-                return response, True
+        response = await self._run_skill(skill, text)
+        if response:
+            return response, True
 
         return None, False
 
@@ -302,13 +319,16 @@ class ZariPipeline:
             try:
                 text = await asyncio.wait_for(self.text_queue.get(), timeout=1.0)
 
-                skip, processed = await self._handle_dialog(text)
+                skip, processed, pending_intent = await self._handle_dialog(text)
                 if skip:
                     continue
                 if processed is not None:
                     text = processed
 
-                intent = route(text)
+                if pending_intent:
+                    intent = pending_intent
+                else:
+                    intent = route(text)
                 log.info("Intent: %s | Text: %s", intent, text[:60])
 
                 llm_input = await self._translate_input(text)
@@ -317,7 +337,15 @@ class ZariPipeline:
                 if not self.dialog.is_active and not self.dialog.is_awaiting_confirm:
                     asyncio.create_task(self.persona.extract_from_conversation(text, self.llm))
 
-                response, skill_responded = await self._match_and_execute_skills(text)
+                if pending_intent:
+                    skill = self._get_skill(pending_intent)
+                    if skill:
+                        response = await self._run_skill(skill, text)
+                        skill_responded = response is not None
+                    else:
+                        response, skill_responded = None, False
+                else:
+                    response, skill_responded = await self._match_and_execute_skills(text)
 
                 if response is None and not skill_responded:
                     response = await self._llm_fallback(llm_input)
@@ -344,9 +372,12 @@ class ZariPipeline:
 
                 try:
                     log.info("TTS: %s", response[:100])
+                    self._tts_is_speaking.set()
                     await self.tts.speak(response)
                 except Exception as e:
                     log.error("TTS speak error: %s", e, exc_info=True)
+                finally:
+                    self._tts_is_speaking.clear()
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
@@ -355,15 +386,27 @@ class ZariPipeline:
     async def wake_loop(self):
         if self.wake.device is None:
             log.critical("Mikrofon topilmadi! Dockerda --text rejimini sinab ko'ring: docker compose run zari python -m core.main --text")
+            while self.running:
+                await asyncio.sleep(1)
             return
 
+        import time as time_module
         log.info("'%s' so'zi kutilmoqda (%d Hz)...", settings.wake_word.capitalize(), self.wake.sample_rate)
         self._wake_stop_event.clear()
+        last_activation = 0.0
         while self.running:
             try:
+                if self._tts_is_speaking.is_set():
+                    await asyncio.sleep(0.1)
+                    continue
+                now = time_module.monotonic()
+                if now - last_activation < self._wake_cooldown:
+                    await asyncio.sleep(0.1)
+                    continue
                 audio_data = await asyncio.to_thread(self.wake.wait_for_speech, timeout=1.0, stop_event=self._wake_stop_event)
                 if audio_data:
                     log.info("Ovoz aniqlandi!")
+                    last_activation = time_module.monotonic()
                     await self.audio_queue.put(audio_data)
             except Exception as e:
                 log.error("Wake loop xatosi: %s", e, exc_info=True)
@@ -518,6 +561,61 @@ async def main_async():
         await pipeline.stop()
 
 
+async def text_input_worker(pipeline):
+    loop = asyncio.get_event_loop()
+    while pipeline.running:
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        if not line:
+            await asyncio.sleep(0.1)
+            continue
+        text = line.strip()
+        if text:
+            log.info("TEXT INPUT: %s", text)
+            await pipeline.text_queue.put(text)
+
+
+async def text_output_worker(pipeline):
+    while pipeline.running:
+        try:
+            response = await asyncio.wait_for(pipeline.response_queue.get(), timeout=1.0)
+            if response:
+                print(f"\nZari: {response}\n")
+        except asyncio.TimeoutError:
+            continue
+        except Exception as e:
+            log.error("Output worker xatosi: %s", e)
+
+
+async def main_text_async():
+    pipeline = ZariPipeline()
+
+    def shutdown():
+        pipeline.running = False
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, shutdown)
+
+    await pipeline.init()
+    log.info("Matn rejimi ishga tushdi. Savolingizni yozing (Ctrl+C chiqish):")
+
+    pipeline.running = True
+    workers = [
+        asyncio.create_task(text_input_worker(pipeline)),
+        asyncio.create_task(pipeline.llm_worker()),
+        asyncio.create_task(text_output_worker(pipeline)),
+    ]
+    try:
+        await asyncio.gather(*workers)
+    finally:
+        pipeline.running = False
+        for w in workers:
+            w.cancel()
+        await close_db()
+        await close_redis()
+        await pipeline.stop()
+
+
 def list_devices():
     log.info("Mavjud audio qurilmalar:")
     for i, dev in enumerate(sd.query_devices()):
@@ -532,6 +630,9 @@ def main():
         return
     if len(sys.argv) > 1 and sys.argv[1] == "--list-devices":
         list_devices()
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "--text":
+        asyncio.run(main_text_async())
         return
 
     asyncio.run(main_async())

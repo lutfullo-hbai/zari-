@@ -3,6 +3,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
 
 
+def _make_groq_response(content: str):
+    """Groq API javob formatini yaratadi."""
+    choice = MagicMock()
+    choice.message.content = content
+    response = MagicMock()
+    response.choices = [choice]
+    return response
+
+
 class TestPipelineIntegration:
     """Integration tests for the complete Zari pipeline"""
 
@@ -33,56 +42,53 @@ class TestPipelineIntegration:
     async def test_translator_and_llm_integration(self):
         """Test translation flows through to LLM"""
         from llm.translator import Translator
-        from llm.ollama import OllamaClient
+        from llm.groq_client import GroqClient
 
-        mock_client = MagicMock()
+        mock_groq = MagicMock()
+        mock_groq.chat.completions.create.return_value = _make_groq_response("Hello")
 
-        with patch('ollama.Client', return_value=mock_client):
-            mock_client.chat.return_value = {"message": {"content": "Hello"}}
+        translator = Translator(client=GroqClient(client=mock_groq))
+        llm = GroqClient(client=mock_groq)
 
-            translator = Translator()
-            llm = OllamaClient()
+        translated = translator.uz_to_en("Salom")
+        assert translated == "Hello"
 
-            translated = translator.uz_to_en("Salom")
-            assert translated == "Hello"
-
-            response = llm.chat([{"role": "user", "content": translated}])
-            assert response == "Hello"
+        response = llm.chat([{"role": "user", "content": translated}])
+        assert response == "Hello"
 
     @pytest.mark.asyncio
     async def test_error_handling_chain(self):
         """Test error handling flows correctly through pipeline"""
-        from llm.ollama import OllamaClient
+        from llm.groq_client import GroqClient
 
-        mock_client = MagicMock()
-        mock_client.chat.side_effect = Exception("Connection refused")
+        mock_groq = MagicMock()
+        mock_groq.chat.completions.create.side_effect = Exception("Connection refused")
 
-        with patch('ollama.Client', return_value=mock_client):
-            client = OllamaClient()
+        client = GroqClient(client=mock_groq)
 
-            with pytest.raises(Exception):
-                await client.chat_async([{"role": "user", "content": "test"}])
+        with pytest.raises(Exception):
+            await client.chat_async([{"role": "user", "content": "test"}])
 
     @pytest.mark.asyncio
     async def test_timeout_handling(self):
         """Test that timeouts are handled gracefully"""
-        from llm.ollama import OllamaClient
+        from llm.groq_client import GroqClient
 
-        def slow_chat(*args, **kwargs):
+        def slow_create(*args, **kwargs):
             import time
             time.sleep(0.5)
+            return _make_groq_response("")
 
-        mock_client = MagicMock()
-        mock_client.chat = slow_chat
+        mock_groq = MagicMock()
+        mock_groq.chat.completions.create.side_effect = slow_create
 
-        with patch('ollama.Client', return_value=mock_client):
-            client = OllamaClient()
+        client = GroqClient(client=mock_groq)
 
-            with pytest.raises(asyncio.TimeoutError):
-                await client.chat_async(
-                    [{"role": "user", "content": "test"}],
-                    timeout=0.05,
-                )
+        with pytest.raises(asyncio.TimeoutError):
+            await client.chat_async(
+                [{"role": "user", "content": "test"}],
+                timeout=0.05,
+            )
 
     @pytest.mark.asyncio
     async def test_fallback_to_chat_on_error(self):
@@ -113,49 +119,47 @@ class TestAsyncErrorHandling:
     async def test_translator_timeout(self):
         """Test translator returns original text on timeout"""
         from llm.translator import Translator
+        from llm.groq_client import GroqClient
 
-        mock_client = MagicMock()
+        mock_groq = MagicMock()
 
         def slow_translate(*args, **kwargs):
             import time
             time.sleep(0.5)
 
-        with patch('ollama.Client', return_value=mock_client):
-            translator = Translator()
-            translator.uz_to_en = slow_translate
-            translator.timeout = 0.01
+        translator = Translator(client=GroqClient(client=mock_groq))
+        translator.uz_to_en = slow_translate
+        translator.timeout = 0.01
 
-            result = await translator.uz_to_en_async("Salom")
+        result = await translator.uz_to_en_async("Salom")
 
-            assert result == "Salom"
+        assert result == "Salom"
 
     @pytest.mark.asyncio
     async def test_empty_responses_handled(self):
         """Test that empty responses don't crash"""
-        from llm.ollama import OllamaClient
+        from llm.groq_client import GroqClient
 
-        mock_client = MagicMock()
-        mock_client.chat.return_value = {"message": {"content": ""}}
+        mock_groq = MagicMock()
+        mock_groq.chat.completions.create.return_value = _make_groq_response("")
 
-        with patch('ollama.Client', return_value=mock_client):
-            client = OllamaClient()
-            response = client.chat([{"role": "user", "content": "test"}])
-            assert response == ""
+        client = GroqClient(client=mock_groq)
+        response = client.chat([{"role": "user", "content": "test"}])
+        assert response == ""
 
     @pytest.mark.asyncio
     async def test_malformed_response_handling(self):
         """Test handling of malformed responses"""
-        from llm.ollama import OllamaClient
+        from llm.groq_client import GroqClient
 
-        mock_client = MagicMock()
+        mock_groq = MagicMock()
 
-        with patch('ollama.Client', return_value=mock_client):
-            client = OllamaClient()
+        client = GroqClient(client=mock_groq)
 
-            mock_client.chat.side_effect = KeyError("content")
+        mock_groq.chat.completions.create.side_effect = KeyError("content")
 
-            with pytest.raises(KeyError):
-                client.chat([{"role": "user", "content": "test"}])
+        with pytest.raises(KeyError):
+            client.chat([{"role": "user", "content": "test"}])
 
 
 class TestPipelineQueueHandling:
@@ -163,7 +167,7 @@ class TestPipelineQueueHandling:
 
     @pytest.mark.asyncio
     async def test_audio_to_text_queue_flow(self):
-        """Test basic audio → text queue flow (mimics ZariPipeline)"""
+        """Test basic audio -> text queue flow (mimics ZariPipeline)"""
         audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
         text_queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -177,7 +181,7 @@ class TestPipelineQueueHandling:
 
     @pytest.mark.asyncio
     async def test_text_to_response_queue_flow(self):
-        """Test text → response queue flow (mimics ZariPipeline.llm_worker → tts_worker)"""
+        """Test text -> response queue flow (mimics ZariPipeline.llm_worker -> tts_worker)"""
         response_queue: asyncio.Queue[str] = asyncio.Queue()
 
         await response_queue.put("Salom, qanday yordam kerak?")

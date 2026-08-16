@@ -3,32 +3,27 @@ import inspect
 import logging
 from functools import partial
 
-from ollama import Client
-
 from core.config import settings
+from llm.factory import LLMClient, create_llm_client
 
 log = logging.getLogger("zari")
 
 
 class Translator:
-    def __init__(self, client: Client | None = None):
-        self.client = client or Client(host=settings.ollama_url)
-        self.model = settings.ollama_model
-        self.timeout = 60  # Translation timeout
+    def __init__(self, client: LLMClient | None = None):
+        self._llm = client or create_llm_client()
+        self.timeout = 60
 
     def uz_to_en(self, text: str) -> str:
-        """Synchronous Uzbek to English translation"""
         prompt = (
             "You are a translator. Translate the following Uzbek text to English. "
             "Respond with ONLY the English translation, no explanations, no quotes.\n\n"
             f"Uzbek: {text}\n\nEnglish:"
         )
         try:
-            resp = self.client.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            translation = resp["message"]["content"].strip().strip('"').strip("'")
+            translation = self._llm.chat(
+                [{"role": "user", "content": prompt}]
+            ).strip().strip('"').strip("'")
             log.debug("UZ->EN: '%s' -> '%s'", text, translation)
             return translation
         except Exception as e:
@@ -36,18 +31,15 @@ class Translator:
             return text
 
     def en_to_uz(self, text: str) -> str:
-        """Synchronous English to Uzbek translation"""
         prompt = (
             "You are a translator. Translate the following English text to Uzbek. "
             "Respond with ONLY the Uzbek translation, no explanations, no quotes.\n\n"
             f"English: {text}\n\nUzbek:"
         )
         try:
-            resp = self.client.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            translation = resp["message"]["content"].strip().strip('"').strip("'")
+            translation = self._llm.chat(
+                [{"role": "user", "content": prompt}]
+            ).strip().strip('"').strip("'")
             log.debug("EN->UZ: '%s' -> '%s'", text, translation)
             return translation
         except Exception as e:

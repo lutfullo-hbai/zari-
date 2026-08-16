@@ -68,9 +68,9 @@ class WeatherSkill(BaseSkill):
 
     async def _weather_via_web(self, text: str) -> dict | None:
         from skills.search import SearchSkill
-        from llm.ollama import OllamaClient
+        from llm.factory import create_llm_client
         try:
-            skill = SearchSkill(llm=OllamaClient())
+            skill = SearchSkill(llm=create_llm_client())
             return await skill.execute(text)
         except Exception as e:
             log.debug("Weather via web xatosi: %s", e)

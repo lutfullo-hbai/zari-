@@ -1,9 +1,9 @@
 import logging
 import re
+from datetime import datetime, timezone
 
 from db.database import get_pool
 from skills.base import BaseSkill
-
 
 log = logging.getLogger("zari")
 
@@ -183,8 +183,10 @@ class WikiSkill(BaseSkill):
     async def _set(self, key: str, value: str):
         pool = await get_pool()
         async with pool.acquire() as conn:
+            now = datetime.now(timezone.utc)
             await conn.execute(
-                "INSERT INTO wiki (key, value, updated_at) VALUES ($1, $2, NOW()) "
-                "ON CONFLICT(key) DO UPDATE SET value = $2, updated_at = NOW()",
-                key, value,
+                """INSERT INTO wiki (key, value, updated_at)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT(key) DO UPDATE SET value = $2, updated_at = $3""",
+                key, value, now,
             )

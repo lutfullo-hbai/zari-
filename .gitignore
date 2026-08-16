@@ -19,6 +19,10 @@ build/
 data/memory.db
 data/chroma/
 data/profiles/
+data/zari.db
+
+# Backing services
+Perplexica/
 
 # IDE
 .vscode/

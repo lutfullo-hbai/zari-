@@ -22,7 +22,7 @@ class MockPool:
         return AsyncMock(return_value=[])()
 
     def execute(self, *args, **kwargs):
-        return AsyncMock()()
+        return AsyncMock(return_value="DELETE 0")()
 
 
 @pytest.fixture

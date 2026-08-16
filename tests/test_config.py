@@ -11,6 +11,9 @@ class TestSettings:
         s = Settings(_env_file=None)
         assert s.ollama_url == "http://localhost:11434"
         assert s.ollama_model == "qwen2.5:3b"
+        assert s.groq_model == "llama-3.3-70b-versatile"
+        assert s.groq_api_key == ""
+        assert s.llm_provider == "groq"
         assert s.wake_word == "jarvis"
         assert s.tts_voice == "uz-UZ-MadinaNeural"
         assert s.enable_translation == True
@@ -22,10 +25,14 @@ class TestSettings:
         s = Settings(
             ollama_url="http://custom:11434",
             ollama_model="llama3",
+            groq_model="llama-3.1-8b-instant",
+            llm_provider="ollama",
             wake_word="zari"
         )
         assert s.ollama_url == "http://custom:11434"
         assert s.ollama_model == "llama3"
+        assert s.groq_model == "llama-3.1-8b-instant"
+        assert s.llm_provider == "ollama"
         assert s.wake_word == "zari"
     
     def test_partial_override(self):

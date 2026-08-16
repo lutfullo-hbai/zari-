@@ -12,7 +12,7 @@ from core.config import settings
 log = logging.getLogger("zari")
 
 try:
-    from openwakeword import Model
+    from openwakeword import Model as OWWModel
     HAS_OPENWAKEWORD = True
 except ImportError:
     HAS_OPENWAKEWORD = False
@@ -34,13 +34,23 @@ class WakeWordDetector:
 
         self._oww_model = None
         self._wake_threshold = 0.5
+        self._oww_model_name = ""
         if HAS_OPENWAKEWORD:
             try:
+                import openwakeword
+                import os
+
                 model_paths = getattr(settings, "wake_word_models", None)
                 if model_paths:
-                    self._oww_model = Model(wakeword_models=model_paths)
+                    self._oww_model = OWWModel(wakeword_model_paths=model_paths)
+                    self._oww_model_name = list(self._oww_model.models.keys())[0]
                 else:
-                    self._oww_model = Model(wakeword_models=["hey_jarvis"])
+                    default = os.path.join(
+                        os.path.dirname(openwakeword.__file__),
+                        "resources/models/hey_jarvis_v0.1.onnx",
+                    )
+                    self._oww_model = OWWModel(wakeword_model_paths=[default])
+                    self._oww_model_name = "hey_jarvis"
                 self._wake_threshold = getattr(settings, "wake_threshold", 0.5)
                 log.info(
                     "OpenWakeWord: loaded (threshold=%.2f)",
@@ -144,7 +154,7 @@ class WakeWordDetector:
                         continue
 
                     prediction = self._oww_model.predict(audio_bytes)
-                    wake_score = prediction.get("hey_jarvis", 0)
+                    wake_score = max(prediction.values()) if prediction else 0
 
                     if wake_score > self._wake_threshold:
                         log.info(
@@ -212,7 +222,7 @@ class WakeWordDetector:
         max_silence = int(2.0 * 1000 / self.frame_ms)
         max_frames = int(15.0 * 1000 / self.frame_ms)
 
-        noise_floor = max([self._rms(f) for f in list(buffer)[:3]]) or 1
+        noise_floor = max([self._rms(f) for f in list(buffer)[:3]], default=1)
         rms_threshold = max(noise_floor * 3, self.energy_threshold * 50)
 
         for _ in range(max_frames):

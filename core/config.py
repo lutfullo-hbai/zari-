@@ -2,8 +2,16 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # Ollama (kelajakda qaytish uchun saqlandi)
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
+
+    # Groq API (vaqtincha — kompyuter imkoniyati kichkinaligi uchun)
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # LLM provayderni tanlash: "groq" | "ollama"
+    llm_provider: str = "groq"
 
     database_url: str = "postgresql:///zari"
     redis_url: str = "redis://localhost:6379/0"
@@ -31,6 +39,9 @@ class Settings(BaseSettings):
     search_backend: str = "auto"
 
     weather_api_key: str = ""
+    n8n_url: str = "http://localhost:5678"
+    n8n_api_key: str = ""
+    n8n_templates_api_url: str = "http://localhost:8000"
     n8n_workflows_dir: str = ""
 
     rate_limit_max_calls: int = 10

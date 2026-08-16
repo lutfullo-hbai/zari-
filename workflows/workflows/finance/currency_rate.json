@@ -1,0 +1,50 @@
+  {
+    "name": "Valyuta kurslarini olish",
+    "description": "CBR yoki Markaziy bank API dan valyuta kurslarini oladi",
+    "trigger_type": "Manual",
+    "complexity": "low",
+    "integrations": ["HTTP", "Finance"],
+    "tags": ["valyuta", "currency", "dollar", "so'm", "finance"],
+    "nodes": [
+      {
+        "id": "node-1",
+        "name": "Valyuta kursi so'rovi",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 1,
+        "position": [0, 300],
+        "parameters": {
+          "url": "https://cbu.uz/uz/arkhiv-kursov-valyut/json/",
+          "options": {},
+          "sendQuery": true,
+          "sendBody": false,
+          "method": "GET",
+          "authentication": "none"
+        }
+      },
+      {
+        "id": "node-2",
+        "name": "Natijani formatlash",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 1,
+        "position": [300, 300],
+        "parameters": {
+          "values": {
+            "string": [
+              {
+                "name": "currencyData",
+                "value": "={{ JSON.parse($node[\"Valyuta kursi so'rovi\"].json) }}"
+              }
+            ]
+          },
+          "options": {}
+        }
+      }
+    ],
+    "connections": {
+      "Valyuta kursi so'rovi": {
+        "main": [
+          [{ "node": "Natijani formatlash", "type": "main", "index": 0 }]
+        ]
+      }
+    }
+  }

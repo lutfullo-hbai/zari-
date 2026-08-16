@@ -4,7 +4,6 @@ import re
 from db.database import get_pool
 from skills.base import BaseSkill
 
-
 log = logging.getLogger("zari")
 
 

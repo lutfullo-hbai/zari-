@@ -1,0 +1,49 @@
+{
+  "name": "Oltin narxini olish",
+  "description": "Oltin narxini API dan olib tahlil qiladi",
+  "trigger_type": "Scheduled",
+  "complexity": "medium",
+  "integrations": ["HTTP", "Finance"],
+  "tags": ["oltin", "gold", "narx", "price", "finance"],
+  "nodes": [
+    {
+      "id": "node-1",
+      "name": "Oltin narxi API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "url": "https://api.gold-api.com/price/XAU",
+        "options": {},
+        "sendQuery": true,
+        "sendBody": false,
+        "method": "GET",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "node-2",
+      "name": "Narxni formatlash",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [300, 300],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "goldPrice",
+              "value": "={{ $json[\"price\"] }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Oltin narxi API": {
+      "main": [
+        [{ "node": "Narxni formatlash", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

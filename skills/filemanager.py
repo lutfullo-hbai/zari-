@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -126,7 +127,54 @@ class FileManagerSkill(BaseSkill):
             return {"response": "Ko'chirishda xatolik.", "context": "", "source": "filemanager"}
 
     def _extract_path(self, text: str) -> str | None:
-        for kw in ["och", "open", "cat", "o'qi", "read", "ochir", "o'chir", "delete", "rm", "ko'chir", "move", "nomini o'zgartir", "rename", "copy", "nusxa", "list", "ko'rsat", "ls"]:
-            text = text.replace(kw, "").strip()
-        text = text.strip().strip(".,!?").strip()
-        return text if text else None
+        cleaned = text.strip()
+
+        for kw in [
+            "och",
+            "open",
+            "cat",
+            "o'qi",
+            "read",
+            "ochir",
+            "o'chir",
+            "delete",
+            "rm",
+            "ko'chir",
+            "move",
+            "nomini o'zgartir",
+            "rename",
+            "copy",
+            "nusxa",
+            "list",
+            "ko'rsat",
+            "ls",
+            "fayl",
+            "faylni",
+            "papka",
+            "katalog",
+            "yo'li",
+            "manzil",
+        ]:
+            cleaned = re.sub(rf"\b{re.escape(kw)}\b", " ", cleaned, flags=re.IGNORECASE)
+
+        for pattern in [r'"([^"]+)"', r"'([^']+)'"]:
+            match = re.search(pattern, cleaned)
+            if match:
+                return match.group(1).strip()
+
+        tokens = [token for token in re.split(r"\s+", cleaned) if token]
+        for token in reversed(tokens):
+            token = token.strip(".,!?")
+            if not token:
+                continue
+            if token in {".", "..", "~"}:
+                continue
+            if re.match(r"^(~|/|\.{1,2}/|[A-Za-z]:[\\/]).+", token):
+                return token
+            if "/" in token or "\\" in token or token.startswith("."):
+                return token
+            if re.search(r"\.(txt|md|py|json|yaml|yml|csv|log|ini|toml|sql)$", token, re.IGNORECASE):
+                return token
+
+        cleaned = cleaned.strip().strip(".,!?").strip()
+        return cleaned if cleaned else None

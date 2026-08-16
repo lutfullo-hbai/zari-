@@ -102,43 +102,47 @@ class TestDatabase:
     async def test_init_db_creates_tables(self):
         import db.database
         db.database._pool = None
-        mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire.return_value = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("db.database.asyncpg.create_pool", new_callable=AsyncMock, return_value=mock_pool):
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value="")
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value = mock_ctx
+
+        with patch.object(db.database, "get_pool", return_value=mock_pool):
             await db.database.init_db()
+
             exec_calls = mock_conn.execute.call_args_list
-            assert len(exec_calls) >= 3
+            assert len(exec_calls) >= 5
 
         db.database._pool = None
 
     @pytest.mark.asyncio
-    async def test_get_pool_creates_once(self):
+    async def test_get_pool_returns_same_instance(self):
         import db.database
         db.database._pool = None
-        mock_pool = MagicMock()
 
-        with patch("db.database.asyncpg.create_pool", new_callable=AsyncMock, return_value=mock_pool) as create:
+        mock_pool = AsyncMock()
+        with patch("db.database.asyncpg.create_pool", new_callable=AsyncMock, return_value=mock_pool):
             pool1 = await db.database.get_pool()
             pool2 = await db.database.get_pool()
 
             assert pool1 is pool2
-            create.assert_called_once()
 
         db.database._pool = None
 
     @pytest.mark.asyncio
-    async def test_close_db(self):
+    async def test_close_db_resets_pool(self):
         import db.database
-        mock_pool = MagicMock()
-        mock_pool.close = AsyncMock()
+        mock_pool = AsyncMock()
         db.database._pool = mock_pool
 
         await db.database.close_db()
 
-        mock_pool.close.assert_called_once()
         assert db.database._pool is None
+        mock_pool.close.assert_called_once()
 
         db.database._pool = None

@@ -8,7 +8,7 @@ import wikipedia
 
 from core.config import settings
 from db.cache import cache_llm_response, get_cached_llm_response
-from llm.ollama import OllamaClient
+from llm.factory import LLMClient, create_llm_client
 from skills.base import BaseSkill
 
 log = logging.getLogger("zari")
@@ -25,8 +25,8 @@ class SearchSkill(BaseSkill):
     timeout = 60.0
     retries = 1
 
-    def __init__(self, llm: OllamaClient | None = None):
-        self.llm = llm or OllamaClient()
+    def __init__(self, llm: LLMClient | None = None):
+        self.llm = llm or create_llm_client()
         self.perplexica_url = settings.perplexica_url.rstrip("/") if settings.perplexica_url else ""
         self.search_backend = (settings.search_backend or "auto").lower()
         self.perplexica_focus = (
@@ -95,6 +95,34 @@ class SearchSkill(BaseSkill):
                 pass
         return result
 
+    _EMBED_KEYWORDS = {"nomic", "embed", "bert", "minilm", "mxbai"}
+
+    async def _get_vane_providers(self) -> dict | None:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{self.perplexica_url}/api/providers")
+                resp.raise_for_status()
+                data = resp.json()
+                for p in data.get("providers", []):
+                    if p["name"].lower() == "ollama":
+                        chat = next(
+                            (
+                                m
+                                for m in p.get("chatModels", [])
+                                if not any(kw in m["key"].lower() for kw in self._EMBED_KEYWORDS)
+                            ),
+                            None,
+                        ) or next(iter(p.get("chatModels", [])), {})
+                        embed = next(iter(p.get("embeddingModels", [])), {})
+                        return {
+                            "providerId": p["id"],
+                            "chatKey": chat.get("key", ""),
+                            "embedKey": embed.get("key", ""),
+                        }
+        except Exception as e:
+            log.warning("Vane providers xatosi: %s", e)
+        return None
+
     async def _search_with_perplexica(self, query: str) -> dict | None:
         if not self.perplexica_url:
             return None
@@ -102,29 +130,33 @@ class SearchSkill(BaseSkill):
         if self.search_backend not in {"auto", "perplexica"}:
             return None
 
+        providers = await self._get_vane_providers()
+        if not providers:
+            return None
+
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     f"{self.perplexica_url}/api/search",
                     json={
+                        "chatModel": {
+                            "providerId": providers["providerId"],
+                            "key": providers["chatKey"],
+                        },
+                        "embeddingModel": {
+                            "providerId": providers["providerId"],
+                            "key": providers["embedKey"],
+                        },
+                        "sources": [self.perplexica_focus],
                         "query": query,
-                        "focusMode": self.perplexica_focus,
                     },
                     headers={"Content-Type": "application/json"},
                 )
                 response.raise_for_status()
                 data = response.json()
 
-            answer = ""
-            sources = []
-
-            messages = data.get("message") or []
-            for msg in messages:
-                if isinstance(msg, dict):
-                    if msg.get("type") == "text":
-                        answer = msg.get("content", "")
-                    elif msg.get("type") == "sources":
-                        sources = msg.get("sources", [])
+            answer = data.get("message", "")
+            sources = data.get("sources", [])
 
             if not answer:
                 return None

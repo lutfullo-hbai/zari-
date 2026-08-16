@@ -23,7 +23,7 @@ def test_skill_loader_skips_private_modules():
 
 def test_skill_loader_instantiate_all():
     from unittest.mock import patch
-    with patch('llm.ollama.OllamaClient'):
+    with patch('llm.groq_client.Groq'):
         loader = SkillLoader(package_name="skills")
         instances = loader.instantiate_all()
 
