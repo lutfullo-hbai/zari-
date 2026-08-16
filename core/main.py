@@ -65,13 +65,13 @@ class ZariPipeline:
 
         self.search_skill = SearchSkill(llm=self.llm)
         self.email_skill = EmailSkill(
-            smtp_host=getattr(settings, "smtp_host", ""),
-            smtp_port=getattr(settings, "smtp_port", 587),
-            smtp_username=getattr(settings, "smtp_username", ""),
-            smtp_password=getattr(settings, "smtp_password", ""),
-            smtp_use_tls=getattr(settings, "smtp_use_tls", True),
-            sender_address=getattr(settings, "sender_address", settings.email_address),
-            default_recipient=getattr(settings, "default_recipient", settings.email_address),
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            smtp_username=settings.smtp_username,
+            smtp_password=settings.smtp_password,
+            smtp_use_tls=settings.smtp_use_tls,
+            sender_address=settings.sender_address or settings.email_address,
+            default_recipient=settings.default_recipient or settings.email_address,
         )
 
         self._skill_map: dict[str, BaseSkill] = {

@@ -67,6 +67,34 @@ class TestSettings:
         )
         assert s2.telegram_token == "test_token"
         assert s2.email_address == "test@example.com"
+
+    def test_smtp_settings(self):
+        """Test SMTP settings defaults and override"""
+        s = Settings(_env_file=None)
+        assert s.smtp_host == ""
+        assert s.smtp_port == 587
+        assert s.smtp_username == ""
+        assert s.smtp_password == ""
+        assert s.smtp_use_tls is True
+        assert s.sender_address == ""
+        assert s.default_recipient == ""
+
+        s2 = Settings(
+            smtp_host="smtp.gmail.com",
+            smtp_port=465,
+            smtp_username="user@gmail.com",
+            smtp_password="app_password",
+            smtp_use_tls=False,
+            sender_address="from@gmail.com",
+            default_recipient="to@gmail.com",
+        )
+        assert s2.smtp_host == "smtp.gmail.com"
+        assert s2.smtp_port == 465
+        assert s2.smtp_username == "user@gmail.com"
+        assert s2.smtp_password == "app_password"
+        assert s2.smtp_use_tls is False
+        assert s2.sender_address == "from@gmail.com"
+        assert s2.default_recipient == "to@gmail.com"
     
     def test_translation_disabled(self):
         """Test disabling translation"""

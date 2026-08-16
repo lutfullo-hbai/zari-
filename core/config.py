@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     telegram_token: str = ""
     email_address: str = ""
 
+    # SMTP (EmailSkill uchun)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    sender_address: str = ""
+    default_recipient: str = ""
+
     enable_translation: bool = True
     whisper_language: str = "uz"
     audio_input_device: int | None = None
