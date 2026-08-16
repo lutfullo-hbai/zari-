@@ -217,6 +217,19 @@ pip install -r requirements.txt
 python core/main.py
 ```
 
+Yoki `Makefile` orqali:
+
+```bash
+make install       # dependency'larni o'rnatadi
+make dev           # + dev tool'lar (pytest, ruff, pre-commit)
+make test          # testlarni ishga tushiradi
+make lint          # ruff tekshiradi
+make run           # ovoz rejimida ishga tushiradi
+make run-text      # matn rejimida (mikrofonsiz)
+make test-mic      # mikrofonni tekshiradi
+make db-up         # PostgreSQL + Redis ni dockerda ko'taradi
+```
+
 ---
 
 ## Muhit o'zgaruvchilari (.env)
