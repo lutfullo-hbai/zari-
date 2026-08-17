@@ -16,10 +16,9 @@ build/
 *.mp3
 
 # Data
-data/memory.db
+data/*.db
 data/chroma/
 data/profiles/
-data/zari.db
 
 # Backing services
 Perplexica/

@@ -1,37 +1,35 @@
 import asyncio
-import logging
-import string
+import signal
 import sys
 import tempfile
-import signal
 import threading
 from pathlib import Path
 
-from core.logging import get_logger
-
 import numpy as np
-import soundfile as sf
 import sounddevice as sd
+import soundfile as sf
 
 from core.config import settings
 from core.dialog_state import DialogManager
+from core.logging import get_logger
 from core.rate_limiter import rate_limiter
 from core.router import match_intents, route
-from db.database import init_db, close_db
-from db.cache import close_redis, cache_llm_response, get_cached_llm_response
+from db.cache import cache_llm_response, close_redis, get_cached_llm_response
+from db.database import close_db, init_db
 from llm.factory import create_llm_client
+from llm.habits import analyze_and_store_habits
+from llm.long_term_memory import retrieve_context
 from llm.memory import SessionMemory
+from llm.persona import UserPersona
 from llm.translator import Translator
 from skills.base import BaseSkill
+from skills.email import EmailSkill
 from skills.loader import SkillLoader
 from skills.search import SearchSkill
-from skills.email import EmailSkill
-from llm.persona import UserPersona
 from voice.stt import SpeechToText
 from voice.tts import TextToSpeech
 from voice.vad import VAD
 from voice.wake import WakeWordDetector
-
 
 log = get_logger("zari")
 
@@ -157,7 +155,7 @@ class ZariPipeline:
                             Path(tmp.name).unlink()
                         except Exception:
                             pass
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 log.error("Audio worker error: %s", e, exc_info=True)
@@ -298,14 +296,24 @@ class ZariPipeline:
                     log.info("LLM (cache): %s", cached)
                     return cached
 
+                messages = self.memory.get()
+
+                context = await retrieve_context(
+                    llm_input,
+                    exclude_session_id=self.memory.session_id,
+                )
+                if context:
+                    messages = [*messages, {"role": "system", "content": context}]
+                    log.info("Kontekst qo'shildi (%d ta qator)", context.count("\n") + 1)
+
                 response = await asyncio.wait_for(
-                    self.llm.chat_async(self.memory.get(), timeout=60),
+                    self.llm.chat_async(messages, timeout=60),
                     timeout=65,
                 )
                 await cache_llm_response(llm_input, response)
                 log.info("LLM: %s", response)
                 return response
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 log.error("LLM timeout")
                 return "Kechirasiz, javob bermay ketib qoldi. Iltimos, boshqatdan harakat qiling."
             except Exception as e:
@@ -357,7 +365,7 @@ class ZariPipeline:
 
                 output = await self._translate_output(response, skill_responded)
                 await self.response_queue.put(output)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 log.error("llm_worker xatosi: %s", e, exc_info=True)
@@ -378,14 +386,17 @@ class ZariPipeline:
                     log.error("TTS speak error: %s", e, exc_info=True)
                 finally:
                     self._tts_is_speaking.clear()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 log.error("TTS worker error: %s", e, exc_info=True)
 
     async def wake_loop(self):
         if self.wake.device is None:
-            log.critical("Mikrofon topilmadi! Dockerda --text rejimini sinab ko'ring: docker compose run zari python -m core.main --text")
+            log.critical(
+                "Mikrofon topilmadi! Dockerda --text rejimini sinab ko'ring:"
+                " docker compose run zari python -m core.main --text"
+            )
             while self.running:
                 await asyncio.sleep(1)
             return
@@ -403,7 +414,11 @@ class ZariPipeline:
                 if now - last_activation < self._wake_cooldown:
                     await asyncio.sleep(0.1)
                     continue
-                audio_data = await asyncio.to_thread(self.wake.wait_for_speech, timeout=1.0, stop_event=self._wake_stop_event)
+                audio_data = await asyncio.to_thread(
+                    self.wake.wait_for_speech,
+                    timeout=1.0,
+                    stop_event=self._wake_stop_event,
+                )
                 if audio_data:
                     log.info("Ovoz aniqlandi!")
                     last_activation = time_module.monotonic()
@@ -437,6 +452,8 @@ class ZariPipeline:
             asyncio.create_task(_spawn(self.tts_worker, "tts_worker")),
         ]
 
+        asyncio.create_task(self._run_habit_analysis())
+
         log.info("Zari ishga tushdi (supervised)")
 
         try:
@@ -445,6 +462,15 @@ class ZariPipeline:
             self.running = False
             for s in getattr(self, "_supervisors", []):
                 s.cancel()
+
+    async def _run_habit_analysis(self):
+        try:
+            await asyncio.sleep(10)
+            facts = await analyze_and_store_habits(self.persona)
+            if facts:
+                log.info("Odatlar aniqlandi: %s", facts)
+        except Exception as e:
+            log.warning("Odat tahlili xatosi (kritik emas): %s", e)
 
     async def stop(self):
         self.running = False
@@ -461,7 +487,7 @@ class ZariPipeline:
         if supervisors:
             try:
                 await asyncio.wait_for(asyncio.gather(*supervisors, return_exceptions=True), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 log.warning("Timeout waiting for supervisor tasks to exit")
 
         await self._drain_queues(timeout=3)
@@ -580,7 +606,7 @@ async def text_output_worker(pipeline):
             response = await asyncio.wait_for(pipeline.response_queue.get(), timeout=1.0)
             if response:
                 print(f"\nZari: {response}\n")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             continue
         except Exception as e:
             log.error("Output worker xatosi: %s", e)
