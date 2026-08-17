@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 
 from core.config import settings
 from core.logging import get_logger
+from core.scheduler import add_task, list_tasks, remove_task
 from web.schemas import ChatRequest, ChatResponse, StatusResponse
 
 log = get_logger("zari.web")
@@ -103,3 +104,37 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_text("Javob vaqti tugadi.")
     except WebSocketDisconnect:
         log.info("WebSocket uzildi: %s", session_id)
+
+
+@app.get("/api/tasks")
+async def get_tasks():
+    tasks = await list_tasks(active_only=False)
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "message": t.message,
+            "schedule_type": t.schedule_type,
+            "schedule_value": t.schedule_value,
+            "is_active": t.is_active,
+            "next_run": t.next_run.isoformat() if t.next_run else None,
+        }
+        for t in tasks
+    ]
+
+
+@app.post("/api/tasks")
+async def create_task(req: dict):
+    task = await add_task(
+        name=req.get("name", "task"),
+        message=req.get("message", ""),
+        schedule_type=req.get("schedule_type", "once"),
+        schedule_value=req.get("schedule_value", ""),
+    )
+    return {"id": task.id, "status": "created"}
+
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: int):
+    removed = await remove_task(task_id)
+    return {"removed": removed}

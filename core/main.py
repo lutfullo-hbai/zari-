@@ -14,6 +14,7 @@ from core.dialog_state import DialogManager
 from core.logging import get_logger
 from core.rate_limiter import rate_limiter
 from core.router import match_intents, route
+from core.scheduler import init_scheduler_table, run_scheduler_loop
 from db.cache import cache_llm_response, close_redis, get_cached_llm_response
 from db.database import close_db, init_db
 from llm.factory import create_llm_client
@@ -486,6 +487,7 @@ class ZariPipeline:
         ]
 
         asyncio.create_task(self._run_habit_analysis())
+        asyncio.create_task(self._run_scheduler())
         log.info("Zari text mode ishga tushdi")
 
         try:
@@ -503,6 +505,13 @@ class ZariPipeline:
                 log.info("Odatlar aniqlandi: %s", facts)
         except Exception as e:
             log.warning("Odat tahlili xatosi (kritik emas): %s", e)
+
+    async def _run_scheduler(self):
+        try:
+            await init_scheduler_table()
+            await run_scheduler_loop(self.text_queue, interval=30.0)
+        except Exception as e:
+            log.warning("Scheduler xatosi (kritik emas): %s", e)
 
     async def stop(self):
         self.running = False

@@ -1,6 +1,5 @@
-import re
 import logging
-from typing import Callable, Dict, Tuple
+import re
 
 log = logging.getLogger("zari")
 
@@ -53,7 +52,7 @@ INTENT_PATTERNS: dict[str, str] = {
 CONFIDENCE_THRESHOLD = 0.6
 
 
-def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
+def detect_intent_with_confidence(text: str) -> tuple[str, float]:
     """
     Detect intent with confidence score
     
@@ -64,13 +63,13 @@ def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
         Tuple of (intent, confidence_score)
     """
     text_lower = text.lower()
-    
+
     # Check each pattern
     matches = {}
     for intent, pattern in INTENT_PATTERNS.items():
         if intent == "chat":  # Skip fallback for now
             continue
-        
+
         # Try to find pattern
         match = re.search(pattern, text_lower)
         if match:
@@ -78,7 +77,7 @@ def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
             matched_text = match.group()
             confidence = min(len(matched_text) / len(text_lower) + 0.3, 1.0)
             matches[intent] = confidence
-    
+
     # Return highest confidence match, or chat fallback
     if matches:
         best_intent = max(matches, key=matches.get)
@@ -89,7 +88,7 @@ def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
             best_confidence
         )
         return best_intent, best_confidence
-    
+
     log.debug("No specific intent matched, using chat fallback")
     return "chat", 0.5
 
@@ -137,7 +136,7 @@ def route(text: str) -> str:
     return detect_intent(text)
 
 
-def route_with_confidence(text: str) -> Tuple[str, float]:
+def route_with_confidence(text: str) -> tuple[str, float]:
     """
     Route with confidence score
     
@@ -165,16 +164,31 @@ def should_use_llm_routing(confidence: float) -> bool:
 
 def disambiguate_with_llm(text: str, candidates: list[str]) -> str:
     """
-    Use LLM to disambiguate between candidate intents
-    (Placeholder for future LLM-based routing)
-    
-    Args:
-        text: User query text
-        candidates: List of candidate intents
-    
-    Returns:
-        Best matching intent
+    LLM orqali nom aniqliklarni hal qiladi.
+
+    Agent Brain ishlatilmaganda, past confidence bilan
+    qaysi intent tanlash kerakligini LLM ga so'raydi.
     """
-    # TODO: Implement LLM-based disambiguation
-    # For now, return first candidate
-    return candidates[0] if candidates else "chat"
+    if not candidates:
+        return "chat"
+    if len(candidates) == 1:
+        return candidates[0]
+
+    import asyncio
+
+    from core.brain import AgentBrain
+
+    brain = AgentBrain()
+    try:
+        loop = asyncio.get_running_loop()
+        decision = loop.run_until_complete(
+            brain.decide(text, matched_intents=candidates)
+        )
+        if decision.actions:
+            return decision.actions[0].skill
+    except RuntimeError:
+        pass
+    except Exception as e:
+        log.warning("LLM disambiguation xatosi: %s", e)
+
+    return candidates[0]
