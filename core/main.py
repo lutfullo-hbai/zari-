@@ -463,6 +463,38 @@ class ZariPipeline:
             for s in getattr(self, "_supervisors", []):
                 s.cancel()
 
+    async def start_text_only(self):
+        self.running = True
+
+        async def _spawn(worker_coro, name: str):
+            while self.running:
+                task = asyncio.create_task(worker_coro())
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    log.info("%s cancelled", name)
+                    break
+                except Exception as e:
+                    log.error("Worker %s crashed: %s", name, e, exc_info=True)
+                    await asyncio.sleep(1)
+                else:
+                    log.info("Worker %s exited cleanly, restarting...", name)
+                    await asyncio.sleep(0.5)
+
+        self._supervisors = [
+            asyncio.create_task(_spawn(self.llm_worker, "llm_worker")),
+        ]
+
+        asyncio.create_task(self._run_habit_analysis())
+        log.info("Zari text mode ishga tushdi")
+
+        try:
+            await asyncio.gather(*self._supervisors)
+        finally:
+            self.running = False
+            for s in getattr(self, "_supervisors", []):
+                s.cancel()
+
     async def _run_habit_analysis(self):
         try:
             await asyncio.sleep(10)

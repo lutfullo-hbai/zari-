@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     rate_limit_max_calls: int = 10
     rate_limit_window: int = 60
 
+    web_host: str = "0.0.0.0"
+    web_port: int = 8080
+    web_cors_origins: list[str] = ["*"]
+
     log_level: str = "INFO"
     log_format: str = "json"
 
