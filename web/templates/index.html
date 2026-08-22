@@ -143,7 +143,9 @@
 
         function connect() {
             const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-            ws = new WebSocket(`${proto}://${location.host}/ws`);
+            const token = localStorage.getItem('zari_token');
+            const authQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+            ws = new WebSocket(`${proto}://${location.host}/ws${authQuery}`);
 
             ws.onopen = () => {
                 statusEl.textContent = 'online';
@@ -156,9 +158,13 @@
                 sendBtn.disabled = false;
             };
 
-            ws.onclose = () => {
+            ws.onclose = (e) => {
                 statusEl.textContent = 'offline';
                 statusEl.className = 'offline';
+                if (e.code === 4401) {
+                    const t = prompt('Zari serveri API kalitini kiriting:');
+                    if (t) localStorage.setItem('zari_token', t);
+                }
                 setTimeout(connect, 3000);
             };
 

@@ -8,18 +8,31 @@ Pipeline text_queue/response_queue orqali integratsiya qilinadi.
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from core.config import settings
 from core.logging import get_logger
 from core.scheduler import add_task, list_tasks, remove_task
-from web.schemas import ChatRequest, ChatResponse, StatusResponse
+from web.schemas import ChatRequest, ChatResponse, StatusResponse, TaskCreateRequest
 
 log = get_logger("zari.web")
 
 app = FastAPI(title="Zari AI", version="0.1.0")
+
+
+async def require_api_key(x_api_key: str | None = Header(None)) -> None:
+    """web_api_key sozlangan bo'lsa — barcha /api/* so'rovlarni tekshiradi."""
+    if settings.web_api_key and x_api_key != settings.web_api_key:
+        raise HTTPException(status_code=401, detail="Noto'g'ri yoki yo'q API kaliti")
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,7 +59,7 @@ async def dashboard():
     return HTMLResponse("<h1>Zari AI</h1><p>Dashboard hali tayyor emas.</p>")
 
 
-@app.get("/api/status", response_model=StatusResponse)
+@app.get("/api/status", response_model=StatusResponse, dependencies=[Depends(require_api_key)])
 async def status():
     if _pipeline is None:
         return StatusResponse(status="offline", provider="none")
@@ -58,7 +71,7 @@ async def status():
     )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
 async def chat(req: ChatRequest):
     if _pipeline is None:
         return ChatResponse(response="Zari hali ishga tushmagan.", source="error")
@@ -72,6 +85,10 @@ async def chat(req: ChatRequest):
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    if settings.web_api_key and ws.query_params.get("token") != settings.web_api_key:
+        await ws.close(code=4401)
+        return
+
     await ws.accept()
     session_id = str(uuid.uuid4())[:8]
     log.info("WebSocket ulandi: %s", session_id)
@@ -95,7 +112,7 @@ async def websocket_endpoint(ws: WebSocket):
         log.info("WebSocket uzildi: %s", session_id)
 
 
-@app.get("/api/tasks")
+@app.get("/api/tasks", dependencies=[Depends(require_api_key)])
 async def get_tasks():
     tasks = await list_tasks(active_only=False)
     return [
@@ -112,18 +129,18 @@ async def get_tasks():
     ]
 
 
-@app.post("/api/tasks")
-async def create_task(req: dict):
+@app.post("/api/tasks", dependencies=[Depends(require_api_key)])
+async def create_task(req: TaskCreateRequest):
     task = await add_task(
-        name=req.get("name", "task"),
-        message=req.get("message", ""),
-        schedule_type=req.get("schedule_type", "once"),
-        schedule_value=req.get("schedule_value", ""),
+        name=req.name,
+        message=req.message,
+        schedule_type=req.schedule_type,
+        schedule_value=req.schedule_value,
     )
     return {"id": task.id, "status": "created"}
 
 
-@app.delete("/api/tasks/{task_id}")
+@app.delete("/api/tasks/{task_id}", dependencies=[Depends(require_api_key)])
 async def delete_task(task_id: int):
     removed = await remove_task(task_id)
     return {"removed": removed}

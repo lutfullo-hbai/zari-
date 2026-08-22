@@ -2,8 +2,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
+import web.app as web_app
 from web.app import app, set_pipeline
-from web.schemas import ChatRequest, ChatResponse, StatusResponse
+from web.schemas import ChatRequest, ChatResponse, StatusResponse, TaskCreateRequest
 
 
 class TestSchemas:
@@ -85,3 +86,85 @@ class TestDashboard:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
+
+
+class TestAuth:
+    def test_auth_disabled_by_default(self, monkeypatch):
+        monkeypatch.setattr(web_app.settings, "web_api_key", "")
+        set_pipeline(None)
+        client = TestClient(app)
+        resp = client.get("/api/status")
+        assert resp.status_code == 200
+
+    def test_auth_required_when_configured(self, monkeypatch):
+        monkeypatch.setattr(web_app.settings, "web_api_key", "secret123")
+        set_pipeline(None)
+        client = TestClient(app)
+
+        assert client.get("/api/status").status_code == 401
+        assert client.get("/api/tasks").status_code == 401
+
+        wrong = client.get("/api/status", headers={"X-API-Key": "wrong"})
+        assert wrong.status_code == 401
+
+    def test_auth_passes_with_valid_key(self, monkeypatch):
+        monkeypatch.setattr(web_app.settings, "web_api_key", "secret123")
+        set_pipeline(None)
+        client = TestClient(app)
+        resp = client.get("/api/status", headers={"X-API-Key": "secret123"})
+        assert resp.status_code == 200
+
+    def test_dashboard_open_even_with_key(self, monkeypatch):
+        """Dashboard statik sahifa — kalitsiz ochiladi (token WS orqali)."""
+        monkeypatch.setattr(web_app.settings, "web_api_key", "secret123")
+        set_pipeline(None)
+        client = TestClient(app)
+        assert client.get("/").status_code == 200
+
+
+class TestTaskEndpointValidation:
+    def test_task_create_schema_defaults(self):
+        req = TaskCreateRequest(message="salom ayt")
+        assert req.name == "task"
+        assert req.schedule_type == "once"
+
+    def test_task_create_schema_rejects_bad_type(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        with _pytest.raises(ValidationError):
+            TaskCreateRequest(message="x", schedule_type="hourly")
+
+    def test_create_task_endpoint(self, monkeypatch):
+        captured = {}
+
+        async def fake_add_task(name, message, schedule_type, schedule_value):
+            captured.update(
+                name=name,
+                message=message,
+                schedule_type=schedule_type,
+                schedule_value=schedule_value,
+            )
+
+            class FakeTask:
+                id = 42
+
+            return FakeTask()
+
+        monkeypatch.setattr(web_app, "add_task", fake_add_task)
+        set_pipeline(None)
+        client = TestClient(app)
+
+        resp = client.post(
+            "/api/tasks",
+            json={"name": "eslatma", "message": "cofe ich", "schedule_type": "daily", "schedule_value": "08:00"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"id": 42, "status": "created"}
+        assert captured["schedule_value"] == "08:00"
+
+    def test_create_task_endpoint_rejects_empty_message(self):
+        set_pipeline(None)
+        client = TestClient(app)
+        resp = client.post("/api/tasks", json={"message": ""})
+        assert resp.status_code == 422

@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     web_host: str = "0.0.0.0"
     web_port: int = 8080
     web_cors_origins: list[str] = ["*"]
+    # Bo'sh bo'lsa auth o'chirilgan (local dev). LAN/server uchun majburiy qiling.
+    web_api_key: str = ""
 
     log_level: str = "INFO"
     log_format: str = "json"
