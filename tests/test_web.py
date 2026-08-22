@@ -53,27 +53,29 @@ class TestChatEndpoint:
 
     def test_chat_success(self):
         mock_pipeline = MagicMock()
-        mock_queue = AsyncMock()
-        mock_queue.get = AsyncMock(return_value="salom, qanday?")
-        mock_pipeline.text_queue = AsyncMock()
-        mock_pipeline.response_queue = mock_queue
+        mock_pipeline.ask = AsyncMock(return_value="salom, qanday?")
         set_pipeline(mock_pipeline)
         client = TestClient(app)
         resp = client.post("/api/chat", json={"message": "salom"})
         assert resp.status_code == 200
         assert resp.json()["response"] == "salom, qanday?"
+        mock_pipeline.ask.assert_awaited_once_with("salom", timeout=65)
 
     def test_chat_timeout(self):
         mock_pipeline = MagicMock()
-        mock_queue = AsyncMock()
-        mock_queue.get = AsyncMock(side_effect=TimeoutError())
-        mock_pipeline.text_queue = AsyncMock()
-        mock_pipeline.response_queue = mock_queue
+        mock_pipeline.ask = AsyncMock(side_effect=TimeoutError())
         set_pipeline(mock_pipeline)
         client = TestClient(app)
         resp = client.post("/api/chat", json={"message": "salom"})
         assert resp.status_code == 200
         assert "tugadi" in resp.json()["response"]
+
+    def test_chat_offline_no_ask_call(self):
+        mock_pipeline = MagicMock()
+        set_pipeline(mock_pipeline)
+        client = TestClient(app)
+        resp = client.post("/api/chat", json={"message": ""})
+        assert resp.status_code == 422
 
 
 class TestDashboard:

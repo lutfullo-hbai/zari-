@@ -5,7 +5,6 @@ WebSocket orqali real-time chat va REST API endpoint'lar.
 Pipeline text_queue/response_queue orqali integratsiya qilinadi.
 """
 
-import asyncio
 import uuid
 from pathlib import Path
 
@@ -64,13 +63,8 @@ async def chat(req: ChatRequest):
     if _pipeline is None:
         return ChatResponse(response="Zari hali ishga tushmagan.", source="error")
 
-    await _pipeline.text_queue.put(req.message)
-
     try:
-        response = await asyncio.wait_for(
-            _pipeline.response_queue.get(),
-            timeout=65,
-        )
+        response = await _pipeline.ask(req.message, timeout=65)
         return ChatResponse(response=response)
     except TimeoutError:
         return ChatResponse(response="Javob vaqti tugadi. Iltimos, qaytadan urinib ko'ring.", source="timeout")
@@ -92,13 +86,8 @@ async def websocket_endpoint(ws: WebSocket):
             data = await ws.receive_text()
             log.info("[%s] Xabar: %s", session_id, data)
 
-            await _pipeline.text_queue.put(data)
-
             try:
-                response = await asyncio.wait_for(
-                    _pipeline.response_queue.get(),
-                    timeout=65,
-                )
+                response = await _pipeline.ask(data, timeout=65)
                 await ws.send_text(response)
             except TimeoutError:
                 await ws.send_text("Javob vaqti tugadi.")

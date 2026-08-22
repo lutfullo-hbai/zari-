@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from core.messages import Incoming
 from db.database import get_pool
 
 log = logging.getLogger("zari")
@@ -131,7 +132,7 @@ async def run_scheduler_loop(text_queue: asyncio.Queue[str], interval: float = 3
             due = await get_due_tasks()
             for task in due:
                 log.info("Scheduled task ishga tushdi: %s → %s", task.name, task.message)
-                await text_queue.put(task.message)
+                await text_queue.put(Incoming(text=task.message, source="scheduler"))
                 await mark_executed(task.id, task.schedule_type, task.schedule_value)
         except Exception as e:
             log.warning("Scheduler xatosi: %s", e)

@@ -3,6 +3,7 @@ import signal
 import sys
 import tempfile
 import threading
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,7 @@ import soundfile as sf
 from core.config import settings
 from core.dialog_state import DialogManager
 from core.logging import get_logger
+from core.messages import Incoming, ResponseRouter
 from core.rate_limiter import rate_limiter
 from core.router import match_intents, route
 from core.scheduler import init_scheduler_table, run_scheduler_loop
@@ -50,8 +52,10 @@ class ZariPipeline:
 
         self._init_skills()
 
+        self.router = ResponseRouter()
+        self._background_tasks: set[asyncio.Task] = set()
         self.audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        self.text_queue: asyncio.Queue[str] = asyncio.Queue()
+        self.text_queue: asyncio.Queue[Incoming] = asyncio.Queue()
         self.response_queue: asyncio.Queue[str] = asyncio.Queue()
 
         self.running = False
@@ -122,6 +126,43 @@ class ZariPipeline:
             await self.memory.add("system", persona_text)
             log.info("Persona context injected into memory")
 
+    async def ask(self, text: str, timeout: float = 65.0) -> str:
+        """
+        Web so'rovi uchun — javobni o'z waiter'i orqali kutadi.
+
+        Correlation ID tufayli parallel so'rovlar javoblari
+        bir-biri bilan almashib qolmaydi.
+        """
+        request_id = uuid.uuid4().hex[:12]
+        future = self.router.register(request_id)
+        try:
+            await self.text_queue.put(
+                Incoming(text=text, source="web", request_id=request_id)
+            )
+            return await asyncio.wait_for(future, timeout=timeout)
+        except TimeoutError:
+            raise
+        finally:
+            self.router.unregister(request_id)
+
+    async def _respond(self, text: str, request_id: str | None) -> None:
+        """Javobni to'g'ri manbaga yetkazadi."""
+        delivered = self.router.resolve(request_id, text)
+        if not delivered:
+            await self.response_queue.put(text)
+
+    def spawn_background(self, coro, name: str = "background") -> asyncio.Task:
+        """
+        Fire-and-forget task — kuchli referens bilan.
+
+        Referens saqlanmasa, Python taskni GC qilishi mumkin
+        (asyncio dokumentatsiyasidagi ma'lum tuzoq).
+        """
+        task: asyncio.Task = asyncio.create_task(coro, name=name)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
     async def audio_worker(self):
         while self.running:
             try:
@@ -147,7 +188,9 @@ class ZariPipeline:
                         log.debug("Empty transcription, skipping")
                         continue
 
-                    await self.text_queue.put(text.strip())
+                    await self.text_queue.put(
+                        Incoming(text=text.strip(), source="voice")
+                    )
                 except Exception as e:
                     log.error("Audio processing error: %s", e, exc_info=True)
                 finally:
@@ -163,7 +206,9 @@ class ZariPipeline:
 
     # === llm_worker helper methods ===
 
-    async def _handle_dialog(self, text: str) -> tuple[bool, str | None, str | None]:
+    async def _handle_dialog(
+        self, text: str, request_id: str | None
+    ) -> tuple[bool, str | None, str | None]:
         if self.dialog.is_awaiting_confirm:
             decision = self.dialog.handle_confirm_response(text)
             if decision is True:
@@ -172,17 +217,19 @@ class ZariPipeline:
                 self.dialog.reset()
                 return False, text, intent
             elif decision is False:
-                await self.response_queue.put("Bekor qilindi.")
+                await self._respond("Bekor qilindi.", request_id)
                 self.dialog.reset()
                 return True, None, None
             else:
-                await self.response_queue.put("Iltimos, ha yoki yo'q deb javob bering.")
+                await self._respond(
+                    "Iltimos, ha yoki yo'q deb javob bering.", request_id
+                )
                 return True, None, None
 
         if self.dialog.is_active:
             still_needed = self.dialog.add_param(text)
             if still_needed:
-                await self.response_queue.put(still_needed)
+                await self._respond(still_needed, request_id)
                 return True, None, None
             text = self.dialog.enriched_text()
             intent = self.dialog.pending_intent or route(text)
@@ -213,7 +260,9 @@ class ZariPipeline:
             log.error("Output translation error: %s", e)
             return response
 
-    async def _execute_skill_for_intent(self, intent: str, text: str) -> tuple[str | None, bool]:
+    async def _execute_skill_for_intent(
+        self, intent: str, text: str, request_id: str | None
+    ) -> tuple[str | None, bool]:
         if intent == "search":
             search_result = await self.search_skill.execute(text)
             if search_result:
@@ -237,8 +286,9 @@ class ZariPipeline:
             wf_skill = self._get_skill("n8n_workflow")
             if wf_skill:
                 if not rate_limiter.is_allowed("N8nWorkflowSkill"):
-                    await self.response_queue.put(
-                        "Kechirasiz, workflow juda tez-tez ishga tushirilmoqda. Biroz kuting."
+                    await self._respond(
+                        "Kechirasiz, workflow juda tez-tez ishga tushirilmoqda. Biroz kuting.",
+                        request_id,
                     )
                     return None, True
                 wf_result = await wf_skill.execute(text)
@@ -258,20 +308,21 @@ class ZariPipeline:
         skill_name = skill.__class__.__name__
         if getattr(skill, "requires_confirmation", False):
             if not rate_limiter.is_allowed(skill_name):
-                await self.response_queue.put(
+                await self._respond(
                     f"Kechirasiz, {skill_name} juda tez-tez ishlatilyapti. "
-                    "Biroz kuting va qayta urinib ko'ring."
+                    "Biroz kuting va qayta urinib ko'ring.",
+                    request_id,
                 )
                 return None, True
 
             question = self.dialog.begin_confirm(intent, text, skill)
-            await self.response_queue.put(question)
+            await self._respond(question, request_id)
             return None, True
 
         if intent in ("music", "weather", "timer", "note"):
             if self.dialog.begin(intent, text):
                 question = self.dialog.next_question()
-                await self.response_queue.put(question)
+                await self._respond(question, request_id)
                 return None, True
 
         response = await self._run_skill(skill, text)
@@ -280,9 +331,13 @@ class ZariPipeline:
 
         return None, False
 
-    async def _match_and_execute_skills(self, text: str) -> tuple[str | None, bool]:
+    async def _match_and_execute_skills(
+        self, text: str, request_id: str | None
+    ) -> tuple[str | None, bool]:
         for candidate_intent in match_intents(text):
-            response, responded = await self._execute_skill_for_intent(candidate_intent, text)
+            response, responded = await self._execute_skill_for_intent(
+                candidate_intent, text, request_id
+            )
             if responded:
                 return response, True
             if response is not None:
@@ -326,9 +381,13 @@ class ZariPipeline:
     async def llm_worker(self):
         while self.running:
             try:
-                text = await asyncio.wait_for(self.text_queue.get(), timeout=1.0)
+                incoming = await asyncio.wait_for(self.text_queue.get(), timeout=1.0)
+                text = incoming.text
+                request_id = incoming.request_id
 
-                skip, processed, pending_intent = await self._handle_dialog(text)
+                skip, processed, pending_intent = await self._handle_dialog(
+                    text, request_id
+                )
                 if skip:
                     continue
                 if processed is not None:
@@ -344,7 +403,7 @@ class ZariPipeline:
                 await self.memory.add("user", llm_input)
 
                 if not self.dialog.is_active and not self.dialog.is_awaiting_confirm:
-                    asyncio.create_task(self.persona.extract_from_conversation(text, self.llm))
+                    self.spawn_background(self.persona.extract_from_conversation(text, self.llm))
 
                 if pending_intent:
                     skill = self._get_skill(pending_intent)
@@ -354,7 +413,9 @@ class ZariPipeline:
                     else:
                         response, skill_responded = None, False
                 else:
-                    response, skill_responded = await self._match_and_execute_skills(text)
+                    response, skill_responded = await self._match_and_execute_skills(
+                        text, request_id
+                    )
 
                 if response is None and not skill_responded:
                     response = await self._llm_fallback(llm_input)
@@ -365,7 +426,7 @@ class ZariPipeline:
                 await self.memory.add("assistant", response)
 
                 output = await self._translate_output(response, skill_responded)
-                await self.response_queue.put(output)
+                await self._respond(output, request_id)
             except TimeoutError:
                 continue
             except Exception as e:
@@ -453,7 +514,7 @@ class ZariPipeline:
             asyncio.create_task(_spawn(self.tts_worker, "tts_worker")),
         ]
 
-        asyncio.create_task(self._run_habit_analysis())
+        self.spawn_background(self._run_habit_analysis(), "habit-analysis")
 
         log.info("Zari ishga tushdi (supervised)")
 
@@ -486,8 +547,8 @@ class ZariPipeline:
             asyncio.create_task(_spawn(self.llm_worker, "llm_worker")),
         ]
 
-        asyncio.create_task(self._run_habit_analysis())
-        asyncio.create_task(self._run_scheduler())
+        self.spawn_background(self._run_habit_analysis(), "habit-analysis")
+        self.spawn_background(self._run_scheduler(), "scheduler")
         log.info("Zari text mode ishga tushdi")
 
         try:

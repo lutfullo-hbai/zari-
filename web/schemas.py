@@ -1,10 +1,17 @@
 """Web UI uchun Pydantic modellari."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=4000)
+
+
+class TaskCreateRequest(BaseModel):
+    name: str = Field(default="task", min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=4000)
+    schedule_type: str = Field(default="once", pattern="^(once|daily|interval)$")
+    schedule_value: str = Field(default="", max_length=100)
 
 
 class ChatResponse(BaseModel):
