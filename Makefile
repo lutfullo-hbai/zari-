@@ -1,4 +1,4 @@
-.PHONY: install dev test test-verbose lint run run-text test-mic list-devices db-up db-down docker-up docker-down clean
+.PHONY: install dev test test-verbose lint run run-text run-web test-mic list-devices db-up db-down docker-up docker-down clean
 
 install:
 	pip install -r requirements.txt
@@ -21,6 +21,9 @@ run:
 
 run-text:
 	python -m core.main --text
+
+run-web:
+	python -m web.server
 
 test-mic:
 	python -m core.main --test-mic

@@ -8,13 +8,23 @@ Zari — ovoz bilan boshqariladigan, kompyutеr ichida yashaydigan, foydalanuvch
 
 ## Holat (2026-08)
 
-- **320 test** yashil, ruff to'liq toza, pre-commit yoqilgan
-- **Web API auth**: `WEB_API_KEY` o'rnatilsa barcha `/api/*` va WebSocket himoyalanadi
-- **Agent Brain**: ko'p intentli so'rovlarda LLM reja tuzadi (`ENABLE_BRAIN=true`, default)
-- **Scheduler**: voice rejimda ham ishlaydi; `once` vazifalar aniq vaqtda trigger bo'ladi
-- **DB**: PostgreSQL 5434 portda, schema faqat alembic migratsiyalari orqali (`alembic upgrade head`)
-- **Default provider**: Ollama (local-first); Groq uchun `.env` da `LLM_PROVIDER=groq`
-- Batafsil tahlil: `REVIEW.md`, `FIXES.md`, `MIGRATION.md`
+**Ishlayapti:**
+
+- 🎙️ **Ovoz zanjiri**: openwakeword ("Zari") → faster-whisper STT → LLM → edge-tts/piper
+- 🧠 **Agent Brain**: ko'p intentli so'rovlarda LLM reja tuzadi, skill zanjirini bajaradi
+- 🔀 **SkillExecutor**: 15+ skill — qidiruv, wiki, musiqa, ob-havo, email, fayllar, screenshot, kalkulyator, taymer, eslatmalar, tarmoq, n8n workflow...
+- ⏰ **Scheduler**: `once/daily/interval` vazifalar Postgres'da saqlanadi, voice rejimda ham ishlaydi
+- 💬 **Dialog holati**: ko'p bosqichli so'rovlar + xavfli harakatlar uchun tasdiqlash
+- 🌐 **Web UI**: FastAPI + WebSocket chat, dashboard, API key auth (`WEB_API_KEY`)
+- 🗄️ **DB**: PostgreSQL (asyncpg) + Redis cache, schema alembic migratsiyalari orqali
+- 📊 **Sifat**: 320 test yashil, ruff toza, pre-commit yoqilgan
+
+**Yo'q (yo'l xaritasida):**
+
+- 🌐 Browser agent (browser-use), 🖥️ system control pack, 📄 hujjatlar (PDF/Word/Excel),
+  👁️ vision, 🎙️ XTTS ovoz kloni, 🧠 semantik vector xotira, 📅 Google Calendar, 🏠 Smart Home
+
+Batafsil tahlil: `REVIEW.md`, `FIXES.md`, `MIGRATION.md`
 
 ---
 
@@ -55,55 +65,70 @@ Zari [12factor.net](https://12factor.net/) tamoyillariga asoslanib quriladi:
 ```
 zari/
 ├── core/
-│   ├── main.py              # Asosiy loop — wake word eshitish
-│   ├── config.py            # .env asosida konfiguratsiya
-│   └── router.py            # Niyat → modul yo'naltirish
+│   ├── main.py              # ZariPipeline — worker orkestratsiyasi (audio/llm/tts)
+│   ├── cli.py               # Kirish nuqtasi: ovoz/matn rejimi, diagnostika
+│   ├── skill_executor.py    # Intent → skill routing + Brain zanjiri
+│   ├── brain.py             # AgentBrain — ko'p intentli Decision Engine
+│   ├── router.py            # Regex intent aniqlash (tez yo'l)
+│   ├── scheduler.py         # Postgres asosida vazifa rejalashtirish
+│   ├── messages.py          # Incoming + ResponseRouter (correlation ID)
+│   ├── dialog_state.py      # Ko'p bosqichli dialog + tasdiqlash
+│   ├── rate_limiter.py      # Skill chaqiruv limitlari
+│   └── config.py            # .env asosida konfiguratsiya (pydantic-settings)
 ├── voice/
-│   ├── wake.py              # "Zari" so'zini aniqlash (Porcupine/Vosk)
-│   ├── stt.py               # Ovoz → matn (Whisper local)
-│   └── tts.py               # Matn → ovoz (edge-tts)
+│   ├── wake.py              # "Zari" wake word (openwakeword, local)
+│   ├── stt.py               # Ovoz → matn (faster-whisper)
+│   ├── tts.py               # Matn → ovoz (edge-tts / piper)
+│   └── vad.py               # Ovoz faolligi aniqlash (webrtcvad)
 ├── llm/
-│   ├── ollama.py            # Ollama bilan muloqot
-│   ├── memory.py            # Suhbat tarixi + uzun xotira
-│   └── persona.py           # Foydalanuvchi profili va fikrlash uslubi
-├── skills/
-│   ├── base.py              # BaseSkill abstract class
-│   ├── search.py            # Internet qidiruv
+│   ├── factory.py           # Provider tanlash: Ollama | Groq
+│   ├── ollama.py            # Local LLM muloqoti
+│   ├── groq_client.py       # Groq bulut fallback
+│   ├── memory.py            # Suhbat tarixi (Postgres + Redis cache)
+│   ├── persona.py           # Foydalanuvchi profili + odat tahlili
+│   ├── habits.py            # Odatlarni aniqlash va saqlash
+│   ├── translator.py        # UZ↔EN tarjima zanjiri (ixtiyoriy)
+│   └── long_term_memory.py  # Wiki — uzoq muddatli fakt xotirasi
+├── skills/                  # 15+ skill — BaseSkill'dan meros
+│   ├── base.py              # execute() + execute_with_retry() abstract
+│   ├── loader.py            # Avtomatik skill yuklash
+│   ├── search.py            # DuckDuckGo + Perplexica + sahifa o'qish
+│   ├── wiki.py              # Wikipedia (uz/en) + xulosalash
 │   ├── music.py             # YouTube musiqa
-│   ├── finance.py           # Valyuta, oltin narxlari + tahlil
-│   ├── messaging.py         # Telegram, Email yuborish
-│   └── system.py            # OS buyruqlari
-├── agents/
-│   ├── orchestrator.py      # Zari — bosh agent
-│   ├── coder.py             # Kod yozuvchi agent
-│   ├── tester.py            # Test yozuvchi agent
-│   ├── deployer.py          # Deploy qiluvchi agent
-│   └── researcher.py        # Ma'lumot to'plovchi agent
-├── data/
-│   ├── memory.db            # SQLite — lokal xotira
-│   └── profiles/            # Foydalanuvchi profili JSON
-├── tests/
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
+│   ├── weather.py, calculator.py, timer.py, notes.py
+│   ├── email.py, clipboard.py, filemanager.py, screenshot.py
+│   ├── system_info.py, network.py, n8n_workflow.py
+├── db/
+│   ├── database.py          # asyncpg pool + init_db → alembic upgrade
+│   ├── memory_repo.py       # Sessions/messages repo
+│   └── cache.py             # Redis LLM/session cache
+├── web/
+│   ├── server.py            # FastAPI + WebSocket chat (API key auth)
+│   ├── app.py               # Dashboard (HTML/JS)
+│   └── schemas.py           # Pydantic request validatsiya
+├── alembic/                 # Migratsiyalar (001_initial, 002_scheduled_tasks)
+├── tests/                   # 320 test
+├── docker-compose.yml       # PostgreSQL (5434) + Redis (6380)
 └── .env.example
 ```
+
+**So'rov oqimi:** Wake word → STT → `Incoming` queue → `_handle_dialog` → Router/AgentBrain → SkillExecutor → javob `ResponseRouter` orqali to'g'ri manbaga (voice/web/scheduler).
 
 ---
 
 ## Milestonelar
 
-### Milestone 1 — Ovoz va Asosiy Muloqot
+### Milestone 1 — Ovoz va Asosiy Muloqot ✅
 **Muddat: 2 hafta**
 
 **Maqsad:** Zari birinchi marta gapiradi.
 
-- [ ] Wake word aniqlash — "Zari" deyilsa faollashadi, boshqa ovozlarga javob bermaydi
-- [ ] STT — Whisper local orqali ovozni matnga aylantiradi
-- [ ] LLM — Ollama (qwen2.5:3b) orqali javob beradi
-- [ ] TTS — edge-tts orqali ovoz bilan javob qaytaradi
-- [ ] Suhbat tarixi — sessiya davomida eslab qoladi
-- [ ] `.env` asosida konfiguratsiya
+- [x] Wake word aniqlash — "Zari" deyilsa faollashadi (openwakeword, local)
+- [x] STT — faster-whisper orqali ovozni matnga aylantiradi
+- [x] LLM — Ollama (qwen2.5:3b) orqali javob beradi; Groq fallback
+- [x] TTS — edge-tts/piper orqali ovoz bilan javob qaytaradi
+- [x] Suhbat tarixi — sessiya davomida eslab qoladi (Postgres + Redis)
+- [x] `.env` asosida konfiguratsiya
 
 **Natija:** "Zari, bugun qanday kun?" deysan — u javob beradi.
 
@@ -124,79 +149,135 @@ zari/
 
 ---
 
-### Milestone 3 — Skills Tizimi
+### Milestone 3 — Skills Tizimi ✅
 **Muddat: 3 hafta**
 
 **Maqsad:** Zari amaliy vazifalarni bajaradi.
 
-- [ ] YouTube dan musiqa qidirish va link berish
-- [ ] Valyuta va oltin narxlarini scraping qilish
+- [x] YouTube dan musiqa qidirish va qo'yish
+- [x] Valyuta kurslari (n8n workflow integratsiya)
+- [x] Ob-havo, kalkulyator, taymer, eslatmalar, clipboard
+- [x] Screenshot, fayl boshqaruvi, tarmoq diagnostikasi
+- [x] BaseSkill + avtomatik loader — yangi skill qo'shish juda oson
 - [ ] 5 yillik narx grafigi chiqarish (matplotlib)
-- [ ] Tahlil va xulosa aytish
-- [ ] Fayl yuklab olish (yt-dlp)
-- [ ] BaseSkill — yangi skill qo'shish oson bo'lsin
 
-**Natija:** "Zari, so'nggi 5 yil oltin narxini tahlil qil" — grafik + ovozli xulosa.
+**Natija:** "Zari, musiqa qo'y" / "Zari, screenshot ol" / "Zari, taymer 5 daqiqa".
 
 ---
 
-### Milestone 4 — Xotira va O'rganish
+### Milestone 4 — Xotira va O'rganish ⚙️ (qisman)
 **Muddat: 3 hafta**
 
 **Maqsad:** Zari seni o'rganib boradi.
 
-- [ ] Uzun muddatli xotira (ChromaDB — local vector DB)
-- [ ] Foydalanuvchi profili — qiziqishlar, fikrlash uslubi, odatlar
-- [ ] "Sen doim ertalab ishlay olmasang" — o'zi sezadi
-- [ ] Yangi ma'lumot o'rgatsa — eslab qoladi
-- [ ] Kontekstli javoblar — oldingi suhbatlardan foydalanadi
+- [x] Uzun muddatli xotira — wiki jadvali (fakt saqlash va olish)
+- [x] Foydalanuvchi profili (UserPersona) + odat tahlili (har N soatda)
+- [x] Kontekstli javoblar — oldingi suhbatlardan foydalanadi
+- [ ] Semantik vector xotira (pgvector) — "o'xshash" esdaliklarni topish
+- [ ] "Sen doim ertalab ishlay olmasang" — proaktiv xulosa
 
 **Natija:** 1 oy ishlatgandan keyin Zari seni taniydi.
 
 ---
 
-### Milestone 5 — Xabar va Avtomatlashtirish
+### Milestone 5 — Xabar, Avtomatlashtirish va Brain ✅
 **Muddat: 2 hafta**
 
 **Maqsad:** Zari sening nomingdan harakat qiladi.
 
+- [x] Email yuborish (SMTP + confirmation dialog)
+- [x] Scheduler — `once/daily/interval` vazifalar Postgres'da, voice rejimda ham ishlaydi
+- [x] Web API auth + `/api/tasks` orqali vazifa yaratish
+- [x] AgentBrain — ko'p intentli so'rovlarda reja tuzish va skill zanjiri bajarish
+- [x] Rate limiter — xavfli skill'larni suiiste'moldan himoya
 - [ ] Telegram xabar yuborish
-- [ ] Email yuborish
-- [ ] Vaqt asosida avtomatik vazifalar — "soat 8 da Oybek ga xabar yubor"
-- [ ] APScheduler orqali rejalashtirish
-- [ ] Javob shablonlari — "bunday qilib javob ber"
 
-**Natija:** "Zari, ertaga ertalab Akbar aka ga xabar yubor" — bajaradi.
+**Natija:** "Zari, ertaga ertalab Akbar akaga email yubor" — tasdiqlaydi va bajaradi.
 
 ---
 
-### Milestone 6 — Multi-Agent Sistema
+### Milestone 6 — System Control Pack 🔜 (keyingi)
+**Muddat: 1-2 kun**
+
+**Maqsad:** Zari kompyuterni ovoz bilan boshqaradi.
+
+- [ ] Volume boshqarish (`pactl`) — "Zari, ovozni 50 ga qo'y"
+- [ ] Ilovalarni ochish/yopish (`subprocess`/`pkill`)
+- [ ] Monitor yorqinligi (`brightnessctl`)
+- [ ] Klaviatura/sichqoncha (PyAutoGUI) — faqat tasdiqlash bilan
+- [ ] Lokal musiqa/video (mpv)
+
+---
+
+### Milestone 7 — Hujjatlar va Kod 🔜
+**Muddat: 1 hafta**
+
+- [ ] PDF o'qish + LLM xulosa
+- [ ] Word/Excel yaratish va tahrir (python-docx, openpyxl)
+- [ ] Papkalarni tartibga solish
+- [ ] Code Runner — kod yozib ishga tushirish (sandbox'da)
+
+---
+
+### Milestone 8 — Browser Agent 🔜
+**Muddat: 1 hafta**
+
+- [ ] browser-use + Playwright integratsiya (skill sifatida)
+- [ ] Google Sheets/Docs/Gmail browser orqali
+- [ ] YouTube to'liq boshqaruv (qidirish, qo'yish, to'xtatish)
+- [ ] Form to'ldirish, ma'lumot olish, ticket bron
+- ⚠️ Pul ketadigan harakatlarda ikki bosqichli tasdiq majburiy
+
+---
+
+### Milestone 9 — Semantik Xotira va Vision 🔜
+**Muddat: 1 hafta**
+
+- [ ] pgvector — Postgres ichida vector qidiruv (yangi DB kerak emas)
+- [ ] Ollama vision modellari (`llama3.2-vision`/`qwen2.5-vl`)
+- [ ] Ekrandagi narsani tushuntirish, rasm tahlili, hujjat skanerlash
+
+---
+
+### Milestone 10 — XTTS Ovoz Kloni 🔜
+**Muddat: GPU kerak (~6GB VRAM)**
+
+- [ ] Coqui XTTS-v2 — Zari sening ovozingda javob beradi
+
+---
+
+### Milestone 11 — Google Calendar va Smart Home 🔜
+**Muddat: kelajak**
+
+- [ ] Google Calendar OAuth sinxronizatsiya + kun rejasi
+- [ ] Home Assistant API orqali chiroqlar, harorat, kameralar
+- [ ] Yuzni tanish (ixtiyoriy, insightface)
+
+---
+
+### Milestone 12 — Multi-Agent Sistema 🔜
 **Muddat: 2 oy**
 
 **Maqsad:** Zari boshqa agentlarni boshqaradi.
 
-- [ ] Orchestrator — Zari bosh agent sifatida
-- [ ] Coder Agent — kod yozadi (Ollama)
+- [ ] Orchestrator — Zari bosh agent sifatida (AgentBrain asosida kengaytiriladi)
+- [ ] Coder Agent — kod yozadi
 - [ ] Tester Agent — test yozadi va ishlatadi
 - [ ] Deployer Agent — Docker, Git orqali deploy qiladi
 - [ ] Researcher Agent — ma'lumot to'playdi
-- [ ] Agent'lar o'rtasida xabar almashish protokoli
 - [ ] "Zari, menga vazifa boshqaruv tizimi qur" → agentlar birgalikda quradi
 
 **Natija:** Bitta buyruq — to'liq loyiha quriladi.
 
 ---
 
-### Milestone 7 — To'liq Zari
+### Milestone 13 — To'liq Zari 🔜
 **Muddat: 6 oy+**
 
 **Maqsad:** Haqiqiy shaxsiy OS yordamchisi.
 
-- [ ] Kompyuter ekranini ko'radi va tushunadi (vision model)
-- [ ] Ilovalarni ochadi, yopadi, boshqaradi
-- [ ] Brauzer orqali harakat qiladi (Selenium/Playwright)
-- [ ] Ovoz profili — faqat sening ovozingni taniydi
-- [ ] Oflayn rejim — internet bo'lmasa ham ishlaydi
+- [ ] Faqat sening ovozingni taniydi (voiceprint)
+- [ ] To'liq oflayn rejim
 - [ ] Telefon bilan sinxronizatsiya
 
 ---
@@ -205,28 +286,34 @@ zari/
 
 | Qatlam | Texnologiya | Sabab |
 |--------|-------------|-------|
-| Wake word | Vosk / Porcupine | Local, bepul |
-| STT | Whisper (local) | Aniq, oflayn |
-| LLM | Ollama (qwen2.5, llama3) | Local, bepul |
-| TTS | edge-tts | Sifatli, bepul |
-| Xotira | ChromaDB + SQLite | Local vector DB |
-| Qidiruv | DuckDuckGo API | Bepul |
-| Scraping | BeautifulSoup + Selenium | Moslashuvchan |
-| Grafik | Matplotlib | Oddiy, kuchli |
-| Rejalashtirish | APScheduler | Yengil |
-| Backend | FastAPI | Tez, async |
-| Deploy | Docker Compose | Har joyda ishlaydi |
+| Wake word | openwakeword | Local, bepul, custom model trening mumkin |
+| STT | faster-whisper | Aniq, oflayn, o'zbek tilini biladi |
+| LLM | Ollama (local-first) + Groq fallback | Xususiylik + tezlik |
+| Decision Engine | AgentBrain (LLM) | Ko'p intentli so'rovlarda reja tuzadi |
+| TTS | edge-tts + piper | Sifatli, local; XTTS kloni rejalarda |
+| VAD | webrtcvad | Yengil, real-time |
+| Xotira | PostgreSQL (asyncpg) + Redis | Ishonchli, transactional; pgvector rejalarda |
+| Migratsiya | Alembic | Bitta schema manbasi |
+| Qidiruv | DuckDuckGo + Wikipedia + Perplexica | Bepul, almashtirish mumkin |
+| Rejalashtirish | O'z Scheduler (Postgres asosida) | Voice rejimda ham ishlaydi, retry bilan |
+| Backend | FastAPI + WebSocket + API key auth | Tez, async, xavfsiz |
+| Web UI | HTML/JS dashboard (React rejalarda) | Yengil |
+| Test/Sifat | pytest (320 test) + ruff + pre-commit | Toza kod majburiy |
+| Deploy | Docker Compose (PG 5434, Redis 6380) | Har joyda ishlaydi |
 
 ---
 
 ## O'rnatish
 
+Talab: Python 3.12+, Docker, (ixtiyoriy) Ollama.
+
 ```bash
 git clone https://github.com/username/zari.git
 cd zari
-cp .env.example .env
+cp .env.example .env          # .env ni o'zingizga moslang
+make db-up                    # PostgreSQL + Redis (docker)
 pip install -r requirements.txt
-python core/main.py
+python -m core.main           # ovoz rejimi
 ```
 
 Yoki `Makefile` orqali:
@@ -238,9 +325,12 @@ make test          # testlarni ishga tushiradi
 make lint          # ruff tekshiradi
 make run           # ovoz rejimida ishga tushiradi
 make run-text      # matn rejimida (mikrofonsiz)
+make run-web       # web server + dashboard
 make test-mic      # mikrofonni tekshiradi
-make db-up         # PostgreSQL + Redis ni dockerda ko'taradi
+make db-up         # PostgreSQL (5434) + Redis (6380) docker'da
 ```
+
+> ⚠️ **Diqqat:** DB port **5434** — 5433 emas. Boshqa loyihalar bilan to'qnashmaslik uchun.
 
 ---
 
