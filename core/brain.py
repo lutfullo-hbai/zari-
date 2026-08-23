@@ -15,9 +15,22 @@ from llm.factory import create_llm_client
 log = logging.getLogger("zari")
 
 AVAILABLE_SKILLS = [
-    "weather", "time", "system", "system_info", "email", "music",
-    "workflow", "note", "timer", "calculator", "clipboard", "screenshot",
-    "filemanager", "network", "wiki", "search",
+    "weather",
+    "time",
+    "system",
+    "system_info",
+    "email",
+    "music",
+    "workflow",
+    "note",
+    "timer",
+    "calculator",
+    "clipboard",
+    "screenshot",
+    "filemanager",
+    "network",
+    "wiki",
+    "search",
 ]
 
 

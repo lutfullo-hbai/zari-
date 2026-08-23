@@ -138,9 +138,7 @@ class ZariPipeline:
         request_id = uuid.uuid4().hex[:12]
         future = self.router.register(request_id)
         try:
-            await self.text_queue.put(
-                Incoming(text=text, source="web", request_id=request_id)
-            )
+            await self.text_queue.put(Incoming(text=text, source="web", request_id=request_id))
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError:
             raise
@@ -190,9 +188,7 @@ class ZariPipeline:
                         log.debug("Empty transcription, skipping")
                         continue
 
-                    await self.text_queue.put(
-                        Incoming(text=text.strip(), source="voice")
-                    )
+                    await self.text_queue.put(Incoming(text=text.strip(), source="voice"))
                 except Exception as e:
                     log.error("Audio processing error: %s", e, exc_info=True)
                 finally:
@@ -208,9 +204,7 @@ class ZariPipeline:
 
     # === llm_worker helper methods ===
 
-    async def _handle_dialog(
-        self, text: str, request_id: str | None
-    ) -> tuple[bool, str | None, str | None]:
+    async def _handle_dialog(self, text: str, request_id: str | None) -> tuple[bool, str | None, str | None]:
         if self.dialog.is_awaiting_confirm:
             decision = self.dialog.handle_confirm_response(text)
             if decision is True:
@@ -223,9 +217,7 @@ class ZariPipeline:
                 self.dialog.reset()
                 return True, None, None
             else:
-                await self._respond(
-                    "Iltimos, ha yoki yo'q deb javob bering.", request_id
-                )
+                await self._respond("Iltimos, ha yoki yo'q deb javob bering.", request_id)
                 return True, None, None
 
         if self.dialog.is_active:
@@ -311,8 +303,7 @@ class ZariPipeline:
         if getattr(skill, "requires_confirmation", False):
             if not rate_limiter.is_allowed(skill_name):
                 await self._respond(
-                    f"Kechirasiz, {skill_name} juda tez-tez ishlatilyapti. "
-                    "Biroz kuting va qayta urinib ko'ring.",
+                    f"Kechirasiz, {skill_name} juda tez-tez ishlatilyapti. Biroz kuting va qayta urinib ko'ring.",
                     request_id,
                 )
                 return None, True
@@ -333,22 +324,16 @@ class ZariPipeline:
 
         return None, False
 
-    async def _match_and_execute_skills(
-        self, text: str, request_id: str | None
-    ) -> tuple[str | None, bool]:
+    async def _match_and_execute_skills(self, text: str, request_id: str | None) -> tuple[str | None, bool]:
         for candidate_intent in match_intents(text):
-            response, responded = await self._execute_skill_for_intent(
-                candidate_intent, text, request_id
-            )
+            response, responded = await self._execute_skill_for_intent(candidate_intent, text, request_id)
             if responded:
                 return response, True
             if response is not None:
                 return response, True
         return None, False
 
-    async def _route_and_execute(
-        self, text: str, request_id: str | None
-    ) -> tuple[str | None, bool]:
+    async def _route_and_execute(self, text: str, request_id: str | None) -> tuple[str | None, bool]:
         """
         Yo'naltirish: 1 intent → tez yo'l, ko'p intent → Agent Brain zanjiri.
         """
@@ -436,9 +421,7 @@ class ZariPipeline:
                 text = incoming.text
                 request_id = incoming.request_id
 
-                skip, processed, pending_intent = await self._handle_dialog(
-                    text, request_id
-                )
+                skip, processed, pending_intent = await self._handle_dialog(text, request_id)
                 if skip:
                     continue
                 if processed is not None:
@@ -464,9 +447,7 @@ class ZariPipeline:
                     else:
                         response, skill_responded = None, False
                 else:
-                    response, skill_responded = await self._route_and_execute(
-                        text, request_id
-                    )
+                    response, skill_responded = await self._route_and_execute(text, request_id)
 
                 if response is None and not skill_responded:
                     response = await self._llm_fallback(llm_input)
@@ -515,6 +496,7 @@ class ZariPipeline:
             return
 
         import time as time_module
+
         log.info("'%s' so'zi kutilmoqda (%d Hz)...", settings.wake_word.capitalize(), self.wake.sample_rate)
         self._wake_stop_event.clear()
         last_activation = 0.0
@@ -611,14 +593,23 @@ class ZariPipeline:
             for s in getattr(self, "_supervisors", []):
                 s.cancel()
 
-    async def _run_habit_analysis(self):
-        try:
-            await asyncio.sleep(10)
-            facts = await analyze_and_store_habits(self.persona)
-            if facts:
-                log.info("Odatlar aniqlandi: %s", facts)
-        except Exception as e:
-            log.warning("Odat tahlili xatosi (kritik emas): %s", e)
+    async def _run_habit_analysis(self) -> None:
+        """Periodik odat tahlili — har habit_interval soatda bir marta."""
+        interval_hours = max(settings.habit_analysis_interval, 0.5)
+        first_run = True
+        while True:
+            try:
+                if not first_run:
+                    await asyncio.sleep(interval_hours * 3600)
+                facts = await analyze_and_store_habits(self.persona)
+                if facts:
+                    log.info("Odatlar aniqlandi: %s", facts)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("Odat tahlili xatosi (kritik emas): %s", e)
+            finally:
+                first_run = False
 
     async def _run_scheduler(self) -> None:
         # scheduled_tasks jadvali init_db() (alembic) da yaratilgan bo'ladi

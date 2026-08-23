@@ -9,10 +9,8 @@ Foydalanuvchi so'rovlari:
   - "n8n diagram <filename>" — Mermaid diagram
 """
 
-import asyncio
 import logging
 
-from core.config import settings
 from llm.n8n_templates_client import N8nTemplatesClient
 from skills.base import BaseSkill
 
@@ -56,7 +54,9 @@ class N8nWorkflowSkill(BaseSkill):
         stats = await self._client.get_stats()
         if stats is None:
             return {
-                "response": "n8n workflow templates server ishlamayapti. Serverni ishga tushiring: python api_server.py",
+                "response": (
+                    "n8n workflow templates server ishlamayapti. " "Serverni ishga tushiring: python api_server.py"
+                ),
                 "context": "",
                 "source": "n8n_workflow",
             }
@@ -180,11 +180,12 @@ class N8nWorkflowSkill(BaseSkill):
         for w in workflows:
             integrations = ", ".join(w.get("integrations", [])[:3]) or "yo'q"
             status = "faol" if w.get("active") else "nofaol"
-            lines.append(
-                f"  * {w['name']} — {w['trigger_type']}, {w['node_count']} node, {integrations} [{status}]"
-            )
+            lines.append(f"  * {w['name']} — {w['trigger_type']}, {w['node_count']} node, {integrations} [{status}]")
 
-        response = f"{total} ta workflow topildi (sahifa {result.get('page', 1)}/{result.get('pages', 1)}):\n" + "\n".join(lines)
+        response = (
+            f"{total} ta workflow topildi (sahifa {result.get('page', 1)}/{result.get('pages', 1)}):\n"
+            + "\n".join(lines)
+        )
         return {
             "response": response,
             "context": str([w["filename"] for w in workflows]),

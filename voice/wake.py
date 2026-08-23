@@ -2,17 +2,17 @@ import collections
 import logging
 import threading
 
-import webrtcvad
-import sounddevice as sd
 import numpy as np
+import sounddevice as sd
+import webrtcvad
 
 from core.config import settings
-
 
 log = logging.getLogger("zari")
 
 try:
     from openwakeword import Model as OWWModel
+
     HAS_OPENWAKEWORD = True
 except ImportError:
     HAS_OPENWAKEWORD = False
@@ -37,8 +37,9 @@ class WakeWordDetector:
         self._oww_model_name = ""
         if HAS_OPENWAKEWORD:
             try:
-                import openwakeword
                 import os
+
+                import openwakeword
 
                 model_paths = getattr(settings, "wake_word_models", None)
                 if model_paths:
@@ -119,16 +120,12 @@ class WakeWordDetector:
     def _rms(self, audio: np.ndarray) -> float:
         return float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
 
-    def wait_for_speech(
-        self, timeout: float = 60.0, stop_event: threading.Event | None = None
-    ) -> bytes | None:
+    def wait_for_speech(self, timeout: float = 60.0, stop_event: threading.Event | None = None) -> bytes | None:
         if self._oww_model is not None:
             return self._wait_for_wakeword(timeout, stop_event)
         return self._wait_for_vad(timeout, stop_event)
 
-    def _wait_for_wakeword(
-        self, timeout: float, stop_event: threading.Event | None
-    ) -> bytes | None:
+    def _wait_for_wakeword(self, timeout: float, stop_event: threading.Event | None) -> bytes | None:
         buffer = collections.deque(maxlen=50)
         total_blocks = int(timeout * 1000 / self.frame_ms)
         frame_idx = 0
@@ -167,9 +164,7 @@ class WakeWordDetector:
             log.error("OpenWakeWord error: %s", e)
         return None
 
-    def _wait_for_vad(
-        self, timeout: float, stop_event: threading.Event | None
-    ) -> bytes | None:
+    def _wait_for_vad(self, timeout: float, stop_event: threading.Event | None) -> bytes | None:
         buffer = collections.deque(maxlen=50)
         speech_count = 0
         total_blocks = int(timeout * 1000 / self.frame_ms)

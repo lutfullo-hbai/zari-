@@ -36,7 +36,7 @@ class SessionMemory:
             return self._messages
         system = [m for m in self._messages if m["role"] == "system"]
         others = [m for m in self._messages if m["role"] != "system"]
-        return system + others[-max_messages + len(system):]
+        return system + others[-max_messages + len(system) :]
 
     async def load(self, session_id: str | None = None):
         sid = session_id or self._session_id

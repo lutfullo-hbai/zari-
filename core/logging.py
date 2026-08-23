@@ -47,12 +47,7 @@ class JsonFormatter(logging.Formatter):
 class StructuredLogger(logging.Logger):
     """Custom logger that supports structured fields"""
 
-    def log_event(
-        self,
-        level: int,
-        message: str,
-        **extra_fields
-    ) -> None:
+    def log_event(self, level: int, message: str, **extra_fields) -> None:
         """Log with extra structured fields"""
         record = self.makeRecord(
             self.name,
@@ -86,7 +81,7 @@ class StructuredLogger(logging.Logger):
 def configure_logging() -> logging.Logger:
     """
     Configure structured logging for Zari
-    
+
     Returns:
         Configured logger instance
     """
@@ -110,18 +105,14 @@ def configure_logging() -> logging.Logger:
         formatter = JsonFormatter()
     else:
         # Default text formatter
-        formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
     # Get logger for zari
     zari_logger = logging.getLogger("zari")
-    zari_logger.info("Logging configured - level: %s, format: %s",
-                     settings.log_level.upper(), settings.log_format)
+    zari_logger.info("Logging configured - level: %s, format: %s", settings.log_level.upper(), settings.log_format)
 
     return zari_logger
 
@@ -133,10 +124,10 @@ _default_logger = configure_logging()
 def get_logger(name: str) -> StructuredLogger:
     """
     Get a named logger
-    
+
     Args:
         name: Logger name (usually __name__)
-    
+
     Returns:
         Configured StructuredLogger instance
     """
@@ -155,15 +146,11 @@ if __name__ == "__main__":
     logger.warning("Warning message")
     logger.error("Error message")
 
-    logger.info_event("Event with extra fields",
-                     user_id="user123",
-                     session_id="sess456")
+    logger.info_event("Event with extra fields", user_id="user123", session_id="sess456")
 
     try:
         1 / 0
     except Exception:
         logger.exception("An error occurred")
 
-    logger.debug_event("Debug event",
-                      component="router",
-                      duration_ms=42)
+    logger.debug_event("Debug event", component="router", duration_ms=42)

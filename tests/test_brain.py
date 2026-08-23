@@ -31,11 +31,15 @@ class TestAgentBrainDecide:
     async def test_empty_intents_calls_llm(self):
         brain = AgentBrain()
         brain._llm = AsyncMock()
-        brain._llm.chat_async = AsyncMock(return_value=json.dumps({
-            "actions": [{"skill": "weather", "params": {"city": "Toshkent"}}],
-            "response": "",
-            "needs_clarification": False,
-        }))
+        brain._llm.chat_async = AsyncMock(
+            return_value=json.dumps(
+                {
+                    "actions": [{"skill": "weather", "params": {"city": "Toshkent"}}],
+                    "response": "",
+                    "needs_clarification": False,
+                }
+            )
+        )
         decision = await brain.decide("Toshkentda ob-havo qanday")
         assert len(decision.actions) == 1
         assert decision.actions[0].skill == "weather"
@@ -60,11 +64,13 @@ class TestAgentBrainDecide:
 class TestBrainParsePlan:
     def test_parse_valid_json(self):
         brain = AgentBrain()
-        raw = json.dumps({
-            "actions": [{"skill": "search", "params": {}}],
-            "response": "qidiryapman",
-            "needs_clarification": False,
-        })
+        raw = json.dumps(
+            {
+                "actions": [{"skill": "search", "params": {}}],
+                "response": "qidiryapman",
+                "needs_clarification": False,
+            }
+        )
         decision = brain._parse_plan(raw)
         assert len(decision.actions) == 1
         assert decision.actions[0].skill == "search"
@@ -72,9 +78,15 @@ class TestBrainParsePlan:
 
     def test_parse_with_code_block(self):
         brain = AgentBrain()
-        raw = "```json\n" + json.dumps({
-            "actions": [{"skill": "timer", "params": {"minutes": 5}}],
-        }) + "\n```"
+        raw = (
+            "```json\n"
+            + json.dumps(
+                {
+                    "actions": [{"skill": "timer", "params": {"minutes": 5}}],
+                }
+            )
+            + "\n```"
+        )
         decision = brain._parse_plan(raw)
         assert decision.actions[0].skill == "timer"
 

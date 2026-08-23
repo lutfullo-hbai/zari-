@@ -48,19 +48,13 @@ async def test_single_intent_uses_fast_path():
 @pytest.mark.asyncio
 async def test_multi_intent_runs_brain_chain():
     brain = MagicMock()
-    brain.decide = AsyncMock(
-        return_value=Decision(
-            actions=[Action(skill="search"), Action(skill="wiki")]
-        )
-    )
+    brain.decide = AsyncMock(return_value=Decision(actions=[Action(skill="search"), Action(skill="wiki")]))
     pipeline = make_pipeline(brain=brain)
     search_skill = FakeSkill("kurs 12 500")
     wiki_skill = FakeSkill("eslab qoldim")
     pipeline._skill_map = {"search": search_skill, "wiki": wiki_skill}
 
-    response, responded = await pipeline._route_and_execute(
-        "valyuta kursini top va eslab qol", "req-2"
-    )
+    response, responded = await pipeline._route_and_execute("valyuta kursini top va eslab qol", "req-2")
 
     assert responded is True
     assert "kurs" in response
@@ -88,9 +82,7 @@ async def test_brain_clarification_responds_question():
 
     async def consume():
         # "ob-havo" + "musiqa" — 2 intent, brain ga yo'naltiriladi
-        response, responded = await pipeline._route_and_execute(
-            "ob-havo ayt va musiqa qo'y", request_id
-        )
+        response, responded = await pipeline._route_and_execute("ob-havo ayt va musiqa qo'y", request_id)
         assert responded is True
         assert response is None
 
@@ -106,9 +98,7 @@ async def test_disabled_brain_falls_back_to_regex():
     pipeline = make_pipeline(brain=None)
     pipeline._match_and_execute_skills = AsyncMock(return_value=(None, False))
 
-    response, responded = await pipeline._route_and_execute(
-        "musiqa va ob-havo va email", "req-4"
-    )
+    response, responded = await pipeline._route_and_execute("musiqa va ob-havo va email", "req-4")
 
     assert responded is False
     assert response is None
@@ -117,17 +107,13 @@ async def test_disabled_brain_falls_back_to_regex():
 @pytest.mark.asyncio
 async def test_brain_unknown_skill_is_skipped():
     brain = MagicMock()
-    brain.decide = AsyncMock(
-        return_value=Decision(actions=[Action(skill="mavjud"), Action(skill="ghost")])
-    )
+    brain.decide = AsyncMock(return_value=Decision(actions=[Action(skill="mavjud"), Action(skill="ghost")]))
     pipeline = make_pipeline(brain=brain)
     skill = FakeSkill("natija")
     pipeline._skill_map = {"mavjud": skill}
 
     # "musiqa" + "ob-havo" — 2 intent, brain zanjiriga kiradi
-    response, responded = await pipeline._route_and_execute(
-        "musiqa qo'y va ob-havo ayt", "req-5"
-    )
+    response, responded = await pipeline._route_and_execute("musiqa qo'y va ob-havo ayt", "req-5")
 
     assert responded is True
     assert response == "natija"
@@ -136,14 +122,10 @@ async def test_brain_unknown_skill_is_skipped():
 @pytest.mark.asyncio
 async def test_brain_chain_all_fail_returns_none():
     brain = MagicMock()
-    brain.decide = AsyncMock(
-        return_value=Decision(actions=[Action(skill="ghost1"), Action(skill="ghost2")])
-    )
+    brain.decide = AsyncMock(return_value=Decision(actions=[Action(skill="ghost1"), Action(skill="ghost2")]))
     pipeline = make_pipeline(brain=brain)
 
-    response, responded = await pipeline._route_and_execute(
-        "musiqa qo'y va ob-havo ayt", "req-6"
-    )
+    response, responded = await pipeline._route_and_execute("musiqa qo'y va ob-havo ayt", "req-6")
 
     assert responded is False
     assert response is None

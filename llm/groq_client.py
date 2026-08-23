@@ -56,11 +56,9 @@ class GroqClient:
                 timeout=request_timeout,
             )
             return response
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.error("Groq chat timeout — %d soniyadan oshdi", request_timeout)
-            raise asyncio.TimeoutError(
-                f"Groq response timeout after {request_timeout} seconds"
-            )
+            raise TimeoutError(f"Groq response timeout after {request_timeout} seconds")
         except Exception as e:
             log.error("Groq async chat xatosi: %s", e, exc_info=True)
             raise
@@ -102,20 +100,22 @@ class GroqClient:
             stream = await asyncio.wait_for(
                 loop.run_in_executor(
                     None,
-                    lambda: list(self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=0.7,
-                        max_tokens=2048,
-                        stream=True,
-                    )),
+                    lambda: list(
+                        self.client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,
+                            temperature=0.7,
+                            max_tokens=2048,
+                            stream=True,
+                        )
+                    ),
                 ),
                 timeout=request_timeout,
             )
             for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.error("Groq async stream timeout — %d soniya", request_timeout)
             raise
         except Exception as e:

@@ -1,4 +1,3 @@
-
 from core.router import (
     detect_intent,
     detect_intent_with_confidence,
@@ -148,20 +147,20 @@ class TestLLMRouting:
         """Test that LLM routing is skipped for high confidence"""
         # High confidence
         should_use = should_use_llm_routing(0.9)
-        assert should_use == False
+        assert should_use is False
 
     def test_should_use_llm_routing_low_confidence(self):
         """Test that LLM routing is used for low confidence"""
         # Low confidence
         should_use = should_use_llm_routing(0.3)
-        assert should_use == True
+        assert should_use is True
 
     def test_should_use_llm_routing_threshold(self):
         """Test LLM routing threshold"""
         # At threshold
         should_use = should_use_llm_routing(0.6)
         # Should be False at threshold (0.6 is not less than 0.6)
-        assert should_use == False
+        assert should_use is False
 
 
 class TestEdgeCases:

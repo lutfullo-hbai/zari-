@@ -25,7 +25,7 @@ class TestCalculateNextRun:
         assert result.minute == 30
 
     def test_once_past_time_runs_tomorrow(self):
-        """"HH:MM" allaqachon o'tgan bo'lsa — ertaga."""
+        """ "HH:MM" allaqachon o'tgan bo'lsa — ertaga."""
         now = datetime.now(UTC)
         past_hour = (now.hour - 1) % 24
         value = f"{past_hour:02d}:00"

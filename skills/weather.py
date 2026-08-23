@@ -36,12 +36,15 @@ class WeatherSkill(BaseSkill):
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(self.api_url, params={
-                    "q": city,
-                    "appid": self.api_key,
-                    "units": "metric",
-                    "lang": "uz",
-                })
+                resp = await client.get(
+                    self.api_url,
+                    params={
+                        "q": city,
+                        "appid": self.api_key,
+                        "units": "metric",
+                        "lang": "uz",
+                    },
+                )
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -67,8 +70,9 @@ class WeatherSkill(BaseSkill):
             return None
 
     async def _weather_via_web(self, text: str) -> dict | None:
-        from skills.search import SearchSkill
         from llm.factory import create_llm_client
+        from skills.search import SearchSkill
+
         try:
             skill = SearchSkill(llm=create_llm_client())
             return await skill.execute(text)

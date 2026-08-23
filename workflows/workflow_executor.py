@@ -9,8 +9,6 @@ import json
 import logging
 import os
 import subprocess
-import sys
-from pathlib import Path
 
 import httpx
 
@@ -18,7 +16,21 @@ log = logging.getLogger("zari")
 
 WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "workflows")
 
-ALLOWED_COMMANDS = {"ls", "cat", "echo", "date", "uname", "whoami", "pwd", "uptime", "df", "free", "ps", "top", "hostname"}
+ALLOWED_COMMANDS = {
+    "ls",
+    "cat",
+    "echo",
+    "date",
+    "uname",
+    "whoami",
+    "pwd",
+    "uptime",
+    "df",
+    "free",
+    "ps",
+    "top",
+    "hostname",
+}
 
 
 def run_workflow(workflow_name: str) -> str:
@@ -100,7 +112,9 @@ def _exec_command(params: dict) -> str:
 
     base_cmd = parts[0]
     if base_cmd not in ALLOWED_COMMANDS:
-        return f"Xavfsizlik: '{base_cmd}' buyrug'i ruxsat etilmagan. Ruxsat etilgan: {', '.join(sorted(ALLOWED_COMMANDS))}"
+        return (
+            f"Xavfsizlik: '{base_cmd}' buyrug'i ruxsat etilmagan. Ruxsat etilgan: {', '.join(sorted(ALLOWED_COMMANDS))}"
+        )
 
     try:
         result = subprocess.run(

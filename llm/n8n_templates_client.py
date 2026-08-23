@@ -6,7 +6,6 @@ Port 8000 da ishlaydi, 2053+ ta workflow ni qidirish imkonini beradi.
 """
 
 import logging
-from typing import Any
 
 import httpx
 
@@ -71,9 +70,7 @@ class N8nTemplatesClient:
                 "per_page": per_page,
             }
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/workflows", params=params
-                )
+                resp = await client.get(f"{self.base_url}/api/workflows", params=params)
                 resp.raise_for_status()
                 return resp.json()
         except Exception as e:
@@ -86,9 +83,7 @@ class N8nTemplatesClient:
             return None
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/workflows/{filename}"
-                )
+                resp = await client.get(f"{self.base_url}/api/workflows/{filename}")
                 resp.raise_for_status()
                 return resp.json()
         except Exception as e:
@@ -114,9 +109,7 @@ class N8nTemplatesClient:
             return None
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.get(
-                    f"{self.base_url}/api/workflows/{filename}/diagram"
-                )
+                resp = await client.get(f"{self.base_url}/api/workflows/{filename}/diagram")
                 resp.raise_for_status()
                 data = resp.json()
                 return data.get("diagram")
@@ -124,9 +117,7 @@ class N8nTemplatesClient:
             log.error("n8n templates diagram olishda xato: %s", e)
             return None
 
-    async def search_by_category(
-        self, category: str, page: int = 1, per_page: int = 20
-    ) -> dict | None:
+    async def search_by_category(self, category: str, page: int = 1, per_page: int = 20) -> dict | None:
         """Kategoriya bo'yicha qidiradi."""
         if not self._is_available():
             return None

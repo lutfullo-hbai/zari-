@@ -35,9 +35,7 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ DEFAULT now()
         )
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages (session_id, created_at)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_messages_session ON messages (session_id, created_at)")
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS persona (

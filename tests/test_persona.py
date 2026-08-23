@@ -133,7 +133,6 @@ class TestUserPersona:
             text = await persona.get_system_text()
             assert text.index("Ismingiz") < text.index("Kasbingiz")
 
-
     def test_parse_llm_response_value_with_brackets(self, persona):
         raw = '[{"key": "test", "value": "some [text]", "category": "identity"}]'
         result = persona._parse_llm_response(raw)

@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import sqlite3
-from pathlib import Path
 
 log = logging.getLogger("zari")
 
@@ -77,13 +76,26 @@ class WorkflowDatabase:
 
                 try:
                     with self._conn() as conn:
-                        conn.execute("""
+                        conn.execute(
+                            """
                             INSERT OR REPLACE INTO workflows
                             (filename, name, description, trigger_type, complexity,
                              node_count, integrations, tags, category, raw_json)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (fname, name, description, trigger_type, complexity,
-                              node_count, integrations, tags, category, raw_json))
+                        """,
+                            (
+                                fname,
+                                name,
+                                description,
+                                trigger_type,
+                                complexity,
+                                node_count,
+                                integrations,
+                                tags,
+                                category,
+                                raw_json,
+                            ),
+                        )
                     processed += 1
                 except Exception as e:
                     log.warning("DB yozish xatosi %s: %s", fname, e)
@@ -133,9 +145,14 @@ class WorkflowDatabase:
                         cats[cat].append(i.strip())
         return cats
 
-    def search_workflows(self, query: str = "", trigger_filter: str = "all",
-                         complexity_filter: str = "all", limit: int = 5,
-                         offset: int = 0) -> tuple[list[dict], int]:
+    def search_workflows(
+        self,
+        query: str = "",
+        trigger_filter: str = "all",
+        complexity_filter: str = "all",
+        limit: int = 5,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
         self._ensure_table()
         where_clauses = []
         params = []
@@ -150,17 +167,13 @@ class WorkflowDatabase:
 
         if query:
             like_q = f"%{query}%"
-            where_clauses.append(
-                "(name LIKE ? OR description LIKE ? OR tags LIKE ? OR integrations LIKE ?)"
-            )
+            where_clauses.append("(name LIKE ? OR description LIKE ? OR tags LIKE ? OR integrations LIKE ?)")
             params.extend([like_q, like_q, like_q, like_q])
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         with self._conn() as conn:
-            count_row = conn.execute(
-                f"SELECT COUNT(*) FROM workflows WHERE {where_sql}", params
-            ).fetchone()[0]
+            count_row = conn.execute(f"SELECT COUNT(*) FROM workflows WHERE {where_sql}", params).fetchone()[0]
 
             rows = conn.execute(
                 f"SELECT * FROM workflows WHERE {where_sql} LIMIT ? OFFSET ?",
@@ -169,16 +182,18 @@ class WorkflowDatabase:
 
         results = []
         for r in rows:
-            results.append({
-                "filename": r["filename"],
-                "name": r["name"],
-                "description": r["description"],
-                "trigger_type": r["trigger_type"],
-                "complexity": r["complexity"],
-                "node_count": r["node_count"],
-                "integrations": r["integrations"].split(", ") if r["integrations"] else [],
-                "tags": r["tags"].split(", ") if r["tags"] else [],
-                "category": r["category"],
-            })
+            results.append(
+                {
+                    "filename": r["filename"],
+                    "name": r["name"],
+                    "description": r["description"],
+                    "trigger_type": r["trigger_type"],
+                    "complexity": r["complexity"],
+                    "node_count": r["node_count"],
+                    "integrations": r["integrations"].split(", ") if r["integrations"] else [],
+                    "tags": r["tags"].split(", ") if r["tags"] else [],
+                    "category": r["category"],
+                }
+            )
 
         return results, count_row

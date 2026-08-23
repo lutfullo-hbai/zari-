@@ -29,10 +29,7 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run "
-        "ON scheduled_tasks (is_active, next_run)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks (is_active, next_run)")
 
 
 def downgrade() -> None:

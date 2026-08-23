@@ -6,7 +6,6 @@ Barcha so'rovlar httpx orqali yuboriladi.
 """
 
 import logging
-from typing import Any
 
 import httpx
 
@@ -137,9 +136,7 @@ class N8nClient:
             log.error("n8n workflow yaratishda xato: %s", e)
             return None
 
-    async def trigger_webhook(
-        self, webhook_path: str, data: dict | None = None, method: str = "POST"
-    ) -> dict | None:
+    async def trigger_webhook(self, webhook_path: str, data: dict | None = None, method: str = "POST") -> dict | None:
         """Webhook orqali workflow ni ishga tushiradi."""
         url = f"{self.base_url}/webhook/{webhook_path}"
         try:
@@ -147,9 +144,7 @@ class N8nClient:
                 if method.upper() == "GET":
                     resp = await client.get(url, headers=self._headers())
                 else:
-                    resp = await client.post(
-                        url, headers=self._headers(), json=data or {}
-                    )
+                    resp = await client.post(url, headers=self._headers(), json=data or {})
                 resp.raise_for_status()
                 return resp.json()
         except Exception as e:
@@ -180,8 +175,4 @@ class N8nClient:
         if not query:
             return all_wf
         q = query.lower()
-        return [
-            w for w in all_wf
-            if q in (w.get("name", "").lower())
-            or q in (w.get("description", "").lower())
-        ]
+        return [w for w in all_wf if q in (w.get("name", "").lower()) or q in (w.get("description", "").lower())]

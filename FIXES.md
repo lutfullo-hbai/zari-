@@ -1,7 +1,7 @@
 # Zari Project Fixes — Comprehensive Improvements
 
-**Date:** 2026-06-25  
-**Status:** ✅ Completed - Critical Issues Fixed  
+**Date:** 2026-06-25
+**Status:** ✅ Completed - Critical Issues Fixed
 **Improvement Scope:** Async/await, Error Handling, Testing, Logging, Intent Routing
 
 ---
@@ -12,7 +12,7 @@
 
 #### Files Created/Modified:
 - **tests/test_router.py** — 30+ tests for intent detection with confidence scoring
-- **tests/test_memory.py** — 20+ tests for session memory management  
+- **tests/test_memory.py** — 20+ tests for session memory management
 - **tests/test_config.py** — 15+ tests for configuration parsing
 - **tests/test_llm.py** — 15+ tests for LLM client and translator
 - **tests/test_skills.py** — 15+ tests for skill system
@@ -60,10 +60,7 @@ async def chat_async(self, messages: list[dict], timeout: int = 300) -> str:
     """Async chat with 5-minute default timeout"""
     loop = asyncio.get_event_loop()
     try:
-        response = await asyncio.wait_for(
-            loop.run_in_executor(None, self.chat, messages),
-            timeout=timeout
-        )
+        response = await asyncio.wait_for(loop.run_in_executor(None, self.chat, messages), timeout=timeout)
         return response
     except asyncio.TimeoutError:
         log.error("LLM response timeout after %d seconds", timeout)
@@ -105,19 +102,16 @@ async def llm_worker(self):
             except Exception as e:
                 log.error("Search skill error: %s", e)
                 response = None  # Fall back to LLM
-        
+
         # LLM with timeout protection
         try:
-            response = await self.llm.chat_async(
-                self.memory.get(),
-                timeout=60
-            )
+            response = await self.llm.chat_async(self.memory.get(), timeout=60)
         except asyncio.TimeoutError:
             response = "Timeout occurred. Please try again."
         except Exception as e:
             log.error("LLM error: %s", e)
             response = "Connection error. Please try again."
-        
+
         # Ensure response is never None
         if not response:
             response = "Unable to respond at this time."
@@ -130,11 +124,11 @@ async def llm_worker(self):
 try:
     # STT processing with error isolation
     text = await asyncio.to_thread(self.stt.transcribe, tmp.name)
-    
+
     if not text.strip():
         log.debug("Empty transcription, skipping")
         continue
-    
+
     # Wake word detection with fallback
     if _wake_similar(words_clean[0], wake):
         await self.text_queue.put(command)
@@ -148,11 +142,11 @@ except Exception as e:
 ```python
 try:
     response = await asyncio.wait_for(self.response_queue.get(), timeout=1.0)
-    
+
     if not response or not response.strip():
         log.warning("Empty response from LLM, skipping TTS")
         continue
-    
+
     try:
         await self.tts.speak(response)
     except Exception as e:
@@ -191,14 +185,11 @@ class Translator:
     def uz_to_en(self, text: str) -> str:
         """Synchronous translation (original)"""
         # ... maintains backward compatibility
-    
+
     async def uz_to_en_async(self, text: str) -> str:
         """Async translation with timeout protection"""
         try:
-            return await asyncio.wait_for(
-                loop.run_in_executor(None, self.uz_to_en, text),
-                timeout=60
-            )
+            return await asyncio.wait_for(loop.run_in_executor(None, self.uz_to_en, text), timeout=60)
         except asyncio.TimeoutError:
             log.error("Translation timeout")
             return text  # Fallback to original text
@@ -235,7 +226,7 @@ def detect_intent(text: str) -> str:
 def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
     """
     Returns (intent, confidence_score) where confidence is 0.0-1.0
-    
+
     Examples:
     - "musiqa qo'y" → ("music", 0.85)
     - "random talk" → ("chat", 0.50)
@@ -247,11 +238,11 @@ def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
             matched_text = match.group()
             confidence = min(len(matched_text) / len(text_lower) + 0.3, 1.0)
             matches[intent] = confidence
-    
+
     if matches:
         best_intent = max(matches, key=matches.get)
         return best_intent, matches[best_intent]
-    
+
     return "chat", 0.5
 ```
 
@@ -260,6 +251,7 @@ def detect_intent_with_confidence(text: str) -> Tuple[str, float]:
 def should_use_llm_routing(confidence: float) -> bool:
     """Use LLM for routing if confidence < 0.6"""
     return confidence < CONFIDENCE_THRESHOLD
+
 
 def disambiguate_with_llm(text: str, candidates: list[str]) -> str:
     """Future: Use LLM to choose between ambiguous intents"""
@@ -282,9 +274,7 @@ def disambiguate_with_llm(text: str, candidates: list[str]) -> str:
 #### Problem Fixed:
 ```python
 # BEFORE: Simple logging, hard to parse/analyze
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+logging.basicConfig(format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 ```
 
 #### Solution Implemented:
@@ -294,6 +284,7 @@ logging.basicConfig(
 ```python
 class JsonFormatter(logging.Formatter):
     """Outputs JSON-structured logs"""
+
     def format(self, record):
         log_data = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -307,8 +298,10 @@ class JsonFormatter(logging.Formatter):
         }
         return json.dumps(log_data)
 
+
 class StructuredLogger(logging.Logger):
     """Logger with structured field support"""
+
     def info_event(self, message: str, **extra_fields) -> None:
         """Log with extra structured fields"""
         # Usage:
@@ -389,7 +382,7 @@ Total: 165+ tests
 
 All changes are **100% backward compatible**:
 - ✅ Original `OllamaClient.chat()` method preserved
-- ✅ Original `Translator.uz_to_en()` method preserved  
+- ✅ Original `Translator.uz_to_en()` method preserved
 - ✅ Original `detect_intent()` function preserved
 - ✅ New async methods are additions, not replacements
 - ✅ Existing code works without changes
@@ -487,6 +480,6 @@ python -m core.logging
 
 ---
 
-**Status:** ✅ All fixes implemented and tested  
-**Ready for:** Production deployment with confidence  
+**Status:** ✅ All fixes implemented and tested
+**Ready for:** Production deployment with confidence
 **Recommendation:** Deploy and monitor for 1 week before M2 features

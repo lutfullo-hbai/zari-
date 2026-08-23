@@ -22,9 +22,9 @@ class TestPipelineIntegration:
         from core.router import route
         from llm.memory import SessionMemory
 
-        with patch('db.memory_repo.create_session', return_value='test-session'):
-            with patch('db.memory_repo.save_message', new_callable=AsyncMock):
-                with patch('db.cache.cache_session_messages', new_callable=AsyncMock):
+        with patch("db.memory_repo.create_session", return_value="test-session"):
+            with patch("db.memory_repo.save_message", new_callable=AsyncMock):
+                with patch("db.cache.cache_session_messages", new_callable=AsyncMock):
                     mem = SessionMemory()
                     await mem.init()
 
@@ -77,6 +77,7 @@ class TestPipelineIntegration:
 
         def slow_create(*args, **kwargs):
             import time
+
             time.sleep(0.5)
             return _make_groq_response("")
 
@@ -97,9 +98,9 @@ class TestPipelineIntegration:
         from core.router import route
         from llm.memory import SessionMemory
 
-        with patch('db.memory_repo.create_session', return_value='session-id'):
-            with patch('db.memory_repo.save_message', new_callable=AsyncMock):
-                with patch('db.cache.cache_session_messages', new_callable=AsyncMock):
+        with patch("db.memory_repo.create_session", return_value="session-id"):
+            with patch("db.memory_repo.save_message", new_callable=AsyncMock):
+                with patch("db.cache.cache_session_messages", new_callable=AsyncMock):
                     mem = SessionMemory()
                     await mem.init()
 
@@ -126,6 +127,7 @@ class TestAsyncErrorHandling:
 
         def slow_translate(*args, **kwargs):
             import time
+
             time.sleep(0.5)
 
         translator = Translator(client=GroqClient(client=mock_groq))

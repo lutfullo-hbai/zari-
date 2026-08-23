@@ -17,7 +17,7 @@ class VAD:
     def _frame_generator(self, audio_data: bytes):
         offset = 0
         while offset + self.frame_size <= len(audio_data):
-            yield audio_data[offset:offset + self.frame_size]
+            yield audio_data[offset : offset + self.frame_size]
             offset += self.frame_size
 
     def is_speech(self, audio_data: bytes) -> bool:

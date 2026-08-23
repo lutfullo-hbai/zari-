@@ -22,17 +22,16 @@ class ScreenshotSkill(BaseSkill):
 
     async def _take_screenshot(self) -> dict:
         try:
+            import io
+
             import mss
             from PIL import Image
-            import io
-            import base64
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"screenshot_{timestamp}.png"
             filepath = f"/tmp/{filename}"
 
             with mss.mss() as sct:
-                monitor = sct.monitors[1]
                 sct.shot(mon=1, output=filepath)
 
             img = Image.open(filepath)
@@ -42,10 +41,7 @@ class ScreenshotSkill(BaseSkill):
             img.save(buf, format="PNG")
             buf.seek(0)
 
-            response = (
-                f"Ekran rasmi olindi: {filename} ({w}x{h}, {len(buf.getvalue()) // 1024}KB). "
-                f"Fayl: {filepath}"
-            )
+            response = f"Ekran rasmi olindi: {filename} ({w}x{h}, {len(buf.getvalue()) // 1024}KB). Fayl: {filepath}"
             return {"response": response, "context": filepath, "source": "screenshot"}
         except Exception as e:
             log.warning("Screenshot xatosi: %s", e)

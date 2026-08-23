@@ -18,6 +18,7 @@ async def get_redis():
     if _redis is None:
         try:
             import redis.asyncio as aioredis
+
             _redis = aioredis.Redis.from_url(settings.redis_url, decode_responses=True)
             await _redis.ping()
             log.info("Redis connected")

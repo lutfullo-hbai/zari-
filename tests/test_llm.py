@@ -23,7 +23,7 @@ class TestGroqClient:
 
     def test_init(self):
         """Test GroqClient initialization"""
-        with patch('llm.groq_client.Groq'):
+        with patch("llm.groq_client.Groq"):
             client = GroqClient()
             assert client.model == "llama-3.3-70b-versatile"
 
@@ -33,7 +33,7 @@ class TestGroqClient:
         mock_groq = MagicMock()
         mock_groq.chat.completions.create.return_value = _make_groq_response("Javob berish")
 
-        with patch('llm.groq_client.Groq', return_value=mock_groq):
+        with patch("llm.groq_client.Groq", return_value=mock_groq):
             client = GroqClient(client=mock_groq)
             messages = [{"role": "user", "content": "Salom"}]
             response = await client.chat_async(messages)
@@ -51,8 +51,10 @@ class TestGroqClient:
     @pytest.mark.asyncio
     async def test_chat_async_timeout(self):
         """Test async chat raises TimeoutError when LLM is too slow"""
+
         def slow_create(*args, **kwargs):
             import time
+
             time.sleep(0.5)
             return _make_groq_response("")
 
@@ -115,7 +117,7 @@ class TestTranslator:
 
     def test_init(self):
         """Test Translator initialization"""
-        with patch('llm.groq_client.Groq'):
+        with patch("llm.groq_client.Groq"):
             translator = Translator()
             assert translator._llm.model == "llama-3.3-70b-versatile"
 
@@ -190,7 +192,7 @@ class TestLLMEdgeCases:
     def test_special_characters_in_response(self):
         """Test with special characters"""
         mock_groq = MagicMock()
-        special_text = "Hello\n\t\"quoted\" 🎉 <tag>"
+        special_text = 'Hello\n\t"quoted" 🎉 <tag>'
         mock_groq.chat.completions.create.return_value = _make_groq_response(special_text)
 
         client = GroqClient(client=mock_groq)
@@ -202,34 +204,35 @@ class TestLLMFactory:
     """LLM client factory funksiyasi testlari."""
 
     def test_create_groq_client(self):
-        with patch('llm.factory.GroqClient') as mock_cls:
+        with patch("llm.factory.GroqClient") as mock_cls:
             client = create_llm_client("groq")
             mock_cls.assert_called_once_with()
             assert client is mock_cls.return_value
 
     def test_create_ollama_client(self):
-        with patch('llm.factory.OllamaClient') as mock_cls:
+        with patch("llm.factory.OllamaClient") as mock_cls:
             client = create_llm_client("ollama")
             mock_cls.assert_called_once_with()
             assert client is mock_cls.return_value
 
     def test_unknown_provider_falls_back_to_ollama(self):
-        with patch('llm.factory.GroqClient') as mock_groq, \
-                patch('llm.factory.OllamaClient') as mock_ollama:
+        with patch("llm.factory.GroqClient") as mock_groq, patch("llm.factory.OllamaClient") as mock_ollama:
             client = create_llm_client("unknown")
             mock_groq.assert_not_called()
             mock_ollama.assert_called_once_with()
             assert client is mock_ollama.return_value
 
     def test_case_insensitive_provider(self):
-        with patch('llm.factory.OllamaClient') as mock_cls:
+        with patch("llm.factory.OllamaClient") as mock_cls:
             create_llm_client("  OLLAMA ")
             mock_cls.assert_called_once_with()
 
     def test_uses_settings_provider(self):
-        with patch('llm.factory.GroqClient') as mock_groq, \
-                patch('llm.factory.OllamaClient') as mock_ollama, \
-                patch.object(settings, "llm_provider", "groq"):
+        with (
+            patch("llm.factory.GroqClient") as mock_groq,
+            patch("llm.factory.OllamaClient") as mock_ollama,
+            patch.object(settings, "llm_provider", "groq"),
+        ):
             client = create_llm_client()
             mock_groq.assert_called_once_with()
             mock_ollama.assert_not_called()

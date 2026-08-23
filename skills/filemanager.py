@@ -109,7 +109,15 @@ class FileManagerSkill(BaseSkill):
             return {"response": f"O'chirishda xatolik: {path}", "context": "", "source": "filemanager"}
 
     async def _move_file(self, text: str) -> dict | None:
-        parts = text.replace("ko'chir", "").replace("nomini o'zgartir", "").replace("rename", "").replace("move", "").replace("copy", "").replace("nusxa", "").split()
+        parts = (
+            text.replace("ko'chir", "")
+            .replace("nomini o'zgartir", "")
+            .replace("rename", "")
+            .replace("move", "")
+            .replace("copy", "")
+            .replace("nusxa", "")
+            .split()
+        )
         if len(parts) < 2:
             return None
         src = self._resolve_path(parts[0])

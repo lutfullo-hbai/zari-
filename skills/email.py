@@ -6,7 +6,9 @@ from email.message import EmailMessage
 from skills.base import BaseSkill
 
 
-def _send_sync(smtp_host: str, smtp_port: int, smtp_username: str, smtp_password: str, smtp_use_tls: bool, msg: EmailMessage) -> None:
+def _send_sync(
+    smtp_host: str, smtp_port: int, smtp_username: str, smtp_password: str, smtp_use_tls: bool, msg: EmailMessage
+) -> None:
     with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
         if smtp_use_tls:
             smtp.starttls()
@@ -58,8 +60,12 @@ class EmailSkill(BaseSkill):
         try:
             await asyncio.to_thread(
                 _send_sync,
-                self.smtp_host, self.smtp_port, self.smtp_username,
-                self.smtp_password, self.smtp_use_tls, msg,
+                self.smtp_host,
+                self.smtp_port,
+                self.smtp_username,
+                self.smtp_password,
+                self.smtp_use_tls,
+                msg,
             )
         except Exception as exc:
             return {

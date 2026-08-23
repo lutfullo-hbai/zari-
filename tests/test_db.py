@@ -59,6 +59,7 @@ class TestCache:
     async def test_get_cached_session_messages(self):
         mock_redis = AsyncMock()
         import json
+
         mock_redis.get.return_value = json.dumps([{"role": "user", "content": "salom"}])
         with patch("db.cache.get_redis", return_value=mock_redis):
             from db.cache import get_cached_session_messages
@@ -81,6 +82,7 @@ class TestCache:
     @pytest.mark.asyncio
     async def test_close_redis(self):
         import db.cache
+
         mock_redis = AsyncMock()
         db.cache._redis = mock_redis
 
@@ -93,6 +95,7 @@ class TestCache:
 
     def test_hash_deterministic(self):
         from db.cache import _hash
+
         assert _hash("salom") == _hash("salom")
         assert _hash("salom") != _hash("hello")
 
@@ -105,14 +108,10 @@ class TestDatabase:
 
         db.database._pool = None
 
-        with patch("alembic.command.upgrade") as mock_upgrade, patch(
-            "alembic.config.Config"
-        ) as mock_config_cls:
+        with patch("alembic.command.upgrade") as mock_upgrade, patch("alembic.config.Config") as mock_config_cls:
             await db.database.init_db()
 
-            mock_upgrade.assert_called_once_with(
-                mock_config_cls.return_value, "head"
-            )
+            mock_upgrade.assert_called_once_with(mock_config_cls.return_value, "head")
 
         db.database._pool = None
 
@@ -121,6 +120,7 @@ class TestDatabase:
         import asyncpg
 
         import db.database
+
         db.database._pool = None
 
         mock_pool = AsyncMock()
@@ -135,6 +135,7 @@ class TestDatabase:
     @pytest.mark.asyncio
     async def test_close_db_resets_pool(self):
         import db.database
+
         mock_pool = AsyncMock()
         db.database._pool = mock_pool
 

@@ -55,7 +55,8 @@ class NotesSkill(BaseSkill):
         async with pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO notes (title, content) VALUES ($1, $2)",
-                title, content,
+                title,
+                content,
             )
         response = f"Eslatma saqlandi: {title}"
         return {"response": response, "context": content, "source": "notes"}
@@ -63,14 +64,20 @@ class NotesSkill(BaseSkill):
     async def _search_notes(self, text: str) -> dict | None:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT id, title, content, created_at FROM notes ORDER BY id DESC LIMIT 20"
-            )
+            rows = await conn.fetch("SELECT id, title, content, created_at FROM notes ORDER BY id DESC LIMIT 20")
 
         if not rows:
             return {"response": "Hech qanday eslatma yo'q.", "context": "", "source": "notes"}
 
-        kw = text.replace("top", "").replace("qidir", "").replace("eslat", "").replace("ko'rsat", "").replace("list", "").replace("barcha", "").strip()
+        kw = (
+            text.replace("top", "")
+            .replace("qidir", "")
+            .replace("eslat", "")
+            .replace("ko'rsat", "")
+            .replace("list", "")
+            .replace("barcha", "")
+            .strip()
+        )
         if kw:
             kw_lower = kw.lower()
             rows = [r for r in rows if kw_lower in r["title"].lower() or kw_lower in r["content"].lower()]
@@ -86,9 +93,7 @@ class NotesSkill(BaseSkill):
         kw = text.replace("ochir", "").replace("o'chir", "").replace("delete", "").replace("remove", "").strip()
         pool = await get_pool()
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT id, title, content FROM notes ORDER BY id DESC LIMIT 20"
-            )
+            rows = await conn.fetch("SELECT id, title, content FROM notes ORDER BY id DESC LIMIT 20")
 
             if not rows:
                 return {"response": "O'chirish uchun eslatma yo'q.", "context": "", "source": "notes"}

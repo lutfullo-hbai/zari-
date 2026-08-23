@@ -1,6 +1,6 @@
 import ast
-import operator
 import logging
+import operator
 
 from skills.base import BaseSkill
 
@@ -39,10 +39,12 @@ class CalculatorSkill(BaseSkill):
             return {"response": response, "context": response, "source": "calculator"}
         except Exception:
             try:
-                numbers = [s for s in text.split() if s.replace('.', '').replace('-', '').isdigit()]
-                ops = [s for s in text.split() if s in '+-*/']
+                numbers = [s for s in text.split() if s.replace(".", "").replace("-", "").isdigit()]
+                ops = [s for s in text.split() if s in "+-*/"]
                 if numbers and ops:
-                    expr = ' '.join(numbers[i] + ' ' + ops[i] if i < len(ops) else numbers[i] for i in range(len(numbers)))
+                    expr = " ".join(
+                        numbers[i] + " " + ops[i] if i < len(ops) else numbers[i] for i in range(len(numbers))
+                    )
                     result = self._safe_eval(expr)
                     response = f"{expr} = {result}"
                     return {"response": response, "context": response, "source": "calculator"}

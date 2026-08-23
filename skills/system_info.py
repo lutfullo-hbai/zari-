@@ -9,7 +9,7 @@ import os
 import platform
 import shutil
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from skills.base import BaseSkill
@@ -230,15 +230,18 @@ def _get_linux_uptime() -> float | None:
 
 def _get_macos_uptime() -> float | None:
     import subprocess
+
     try:
         result = subprocess.run(
             ["sysctl", "-n", "kern.boottime"],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         if result.returncode == 0:
             parts = result.stdout.strip().split()
             boot_timestamp = float(parts[3].rstrip(","))
-            now = datetime.now(timezone.utc).timestamp()
+            now = datetime.now(UTC).timestamp()
             return now - boot_timestamp
     except Exception:
         pass
@@ -247,18 +250,21 @@ def _get_macos_uptime() -> float | None:
 
 def _get_windows_uptime() -> float | None:
     import subprocess
+
     try:
         result = subprocess.run(
             ["net", "stats", "srv"],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         if result.returncode == 0:
             for line in result.stdout.splitlines():
                 if "Statistics since" in line:
                     date_str = line.split(" since ")[-1].strip()
                     boot_time = datetime.strptime(date_str, "%m/%d/%Y %I:%M:%S %p")
-                    boot_time = boot_time.replace(tzinfo=timezone.utc)
-                    now = datetime.now(timezone.utc)
+                    boot_time = boot_time.replace(tzinfo=UTC)
+                    now = datetime.now(UTC)
                     return (now - boot_time).total_seconds()
     except Exception:
         pass

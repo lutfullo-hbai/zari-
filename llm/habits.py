@@ -57,7 +57,7 @@ async def detect_habits(min_messages: int = _MIN_MESSAGES) -> dict[str, str]:
     work_hours = classify_peak_hour(hour_counts)
 
     top_hours = sorted(hour_counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
-    active_hours = ", ".join(f"{h}:00-{h+1}:00" for h, _ in top_hours)
+    active_hours = ", ".join(f"{h}:00-{h + 1}:00" for h, _ in top_hours)
 
     return {
         "work_hours": work_hours,

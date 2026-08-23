@@ -25,6 +25,7 @@ class ClipboardSkill(BaseSkill):
     async def _read_clipboard(self) -> dict:
         try:
             import pyperclip
+
             content = pyperclip.paste()
             if not content:
                 return {"response": "Clipboard bo'sh.", "context": "", "source": "clipboard"}
@@ -38,7 +39,7 @@ class ClipboardSkill(BaseSkill):
 
     async def _write_clipboard(self, query: str) -> dict:
         content = query
-        for kw in ["yoz", "saqla", "qo'y", "clipboard", "copy", "write", "set", ":" ," — "]:
+        for kw in ["yoz", "saqla", "qo'y", "clipboard", "copy", "write", "set", ":", " — "]:
             if kw in content:
                 idx = content.index(kw) + len(kw)
                 content = content[idx:].strip().lstrip(":,; -—")
@@ -49,6 +50,7 @@ class ClipboardSkill(BaseSkill):
 
         try:
             import pyperclip
+
             pyperclip.copy(content)
             return {
                 "response": f"Clipboardga yozildi: {content[:100]}",

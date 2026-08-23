@@ -161,6 +161,7 @@ async def test_diagram(skill, mock_client):
 @pytest.mark.asyncio
 async def test_router_intent():
     from core.router import route
+
     assert route("telegram workflow") == "workflow"
     assert route("n8n shablon top") == "workflow"
     assert route("automation template") == "workflow"

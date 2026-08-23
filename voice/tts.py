@@ -1,13 +1,13 @@
 import asyncio
 import logging
-import numpy as np
-import sounddevice as sd
-import soundfile as sf
 import tempfile
 from pathlib import Path
 
-from core.config import settings
+import numpy as np
+import sounddevice as sd
+import soundfile as sf
 
+from core.config import settings
 
 log = logging.getLogger("zari")
 
@@ -24,6 +24,7 @@ def resample(data: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
 class _EdgeTTSBackend:
     def __init__(self, voice: str):
         import edge_tts
+
         self._communicate = edge_tts.Communicate
         self.voice = voice
 
@@ -48,6 +49,7 @@ class _PiperTTSBackend:
     def _init_piper(self):
         try:
             import piper
+
             self._piper = piper
             voice = self.voice
             if self.model_path:
@@ -60,6 +62,7 @@ class _PiperTTSBackend:
 
     async def synthesize(self, text: str) -> str:
         import soundfile as sf
+
         loop = asyncio.get_event_loop()
 
         def _generate():
@@ -73,6 +76,7 @@ class _PiperTTSBackend:
 
     async def save(self, text: str, output_path: str):
         import soundfile as sf
+
         loop = asyncio.get_event_loop()
 
         def _save():

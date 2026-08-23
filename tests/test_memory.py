@@ -11,9 +11,9 @@ class TestSessionMemory:
     @pytest.mark.asyncio
     async def test_add_and_get(self):
         """Test adding and retrieving messages"""
-        with patch('db.memory_repo.create_session', return_value='test-session-id'):
-            with patch('db.memory_repo.save_message', new_callable=AsyncMock):
-                with patch('db.cache.cache_session_messages', new_callable=AsyncMock):
+        with patch("db.memory_repo.create_session", return_value="test-session-id"):
+            with patch("db.memory_repo.save_message", new_callable=AsyncMock):
+                with patch("db.cache.cache_session_messages", new_callable=AsyncMock):
                     mem = SessionMemory()
                     await mem.init()
 
@@ -39,9 +39,9 @@ class TestSessionMemory:
     @pytest.mark.asyncio
     async def test_system_message(self):
         """Test system message insertion"""
-        with patch('db.memory_repo.create_session', return_value='test-session-id'):
-            with patch('db.memory_repo.save_message', new_callable=AsyncMock):
-                with patch('db.cache.cache_session_messages', new_callable=AsyncMock):
+        with patch("db.memory_repo.create_session", return_value="test-session-id"):
+            with patch("db.memory_repo.save_message", new_callable=AsyncMock):
+                with patch("db.cache.cache_session_messages", new_callable=AsyncMock):
                     mem = SessionMemory()
                     await mem.init()
 
@@ -84,12 +84,12 @@ class TestSessionMemory:
     @pytest.mark.asyncio
     async def test_session_id_property(self):
         """Test session_id property"""
-        with patch('db.memory_repo.create_session', return_value='unique-session-123'):
+        with patch("db.memory_repo.create_session", return_value="unique-session-123"):
             mem = SessionMemory()
             assert mem.session_id is None
 
             await mem.init()
-            assert mem.session_id == 'unique-session-123'
+            assert mem.session_id == "unique-session-123"
 
     @pytest.mark.asyncio
     async def test_add_without_session_id(self):
@@ -112,9 +112,9 @@ class TestSessionMemory:
     @pytest.mark.asyncio
     async def test_multiple_roles(self):
         """Test memory with multiple role types"""
-        with patch('db.memory_repo.create_session', return_value='session-id'):
-            with patch('db.memory_repo.save_message', new_callable=AsyncMock):
-                with patch('db.cache.cache_session_messages', new_callable=AsyncMock):
+        with patch("db.memory_repo.create_session", return_value="session-id"):
+            with patch("db.memory_repo.save_message", new_callable=AsyncMock):
+                with patch("db.cache.cache_session_messages", new_callable=AsyncMock):
                     mem = SessionMemory()
                     await mem.init()
 
@@ -130,14 +130,13 @@ class TestSessionMemory:
                     assert msgs[1]["role"] == "user"
                     assert msgs[2]["role"] == "assistant"
 
-
     @pytest.mark.asyncio
     async def test_load_from_cache(self):
         """Test loading messages from cache"""
         cached_msgs = [{"role": "user", "content": "salom"}]
 
-        with patch('db.memory_repo.create_session', return_value='sess-id'):
-            with patch('db.cache.get_cached_session_messages', return_value=cached_msgs):
+        with patch("db.memory_repo.create_session", return_value="sess-id"):
+            with patch("db.cache.get_cached_session_messages", return_value=cached_msgs):
                 mem = SessionMemory()
                 await mem.init()
                 await mem.load()
@@ -150,10 +149,10 @@ class TestSessionMemory:
         """Test loading messages from DB when cache is empty"""
         db_msgs = [{"role": "user", "content": "from db"}]
 
-        with patch('db.memory_repo.create_session', return_value='sess-id'):
-            with patch('db.cache.get_cached_session_messages', return_value=None):
-                with patch('db.memory_repo.load_messages', return_value=db_msgs):
-                    with patch('db.cache.cache_session_messages', new_callable=AsyncMock):
+        with patch("db.memory_repo.create_session", return_value="sess-id"):
+            with patch("db.cache.get_cached_session_messages", return_value=None):
+                with patch("db.memory_repo.load_messages", return_value=db_msgs):
+                    with patch("db.cache.cache_session_messages", new_callable=AsyncMock):
                         mem = SessionMemory()
                         await mem.init()
                         await mem.load()
@@ -173,7 +172,7 @@ class TestSessionMemory:
         """Test load with explicit session_id"""
         cached_msgs = [{"role": "user", "content": "custom session"}]
 
-        with patch('db.cache.get_cached_session_messages', return_value=cached_msgs):
+        with patch("db.cache.get_cached_session_messages", return_value=cached_msgs):
             mem = SessionMemory()
             await mem.load("custom-sess-id")
 

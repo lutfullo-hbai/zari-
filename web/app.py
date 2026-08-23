@@ -34,6 +34,7 @@ async def require_api_key(x_api_key: str | None = Header(None)) -> None:
     if settings.web_api_key and x_api_key != settings.web_api_key:
         raise HTTPException(status_code=401, detail="Noto'g'ri yoki yo'q API kaliti")
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.web_cors_origins,

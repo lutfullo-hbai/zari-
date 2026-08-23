@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Agent Brain — ko'p intentli murakkab so'rovlarda LLM reja tuzadi
     enable_brain: bool = True
 
+    # Odat tahlili oraliqi (soat)
+    habit_analysis_interval: float = 6.0
+
     database_url: str = "postgresql:///zari"
     redis_url: str = "redis://localhost:6379/0"
 

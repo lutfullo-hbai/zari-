@@ -59,5 +59,3 @@ class SpeechToText:
         if raw_text != corrected:
             log.info("STT corrected: '%s' -> '%s'", raw_text, corrected)
         return corrected
-
-

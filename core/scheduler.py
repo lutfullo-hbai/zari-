@@ -44,7 +44,11 @@ async def add_task(
             RETURNING id, name, message, schedule_type, schedule_value,
                       is_active, last_run, next_run
             """,
-            name, message, schedule_type, schedule_value, next_run,
+            name,
+            message,
+            schedule_type,
+            schedule_value,
+            next_run,
         )
     log.info("Task qo'shildi: %s (%s)", name, schedule_type)
     return _row_to_task(row)
@@ -54,22 +58,16 @@ async def list_tasks(active_only: bool = True) -> list[ScheduledTask]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         if active_only:
-            rows = await conn.fetch(
-                "SELECT * FROM scheduled_tasks WHERE is_active = true ORDER BY next_run"
-            )
+            rows = await conn.fetch("SELECT * FROM scheduled_tasks WHERE is_active = true ORDER BY next_run")
         else:
-            rows = await conn.fetch(
-                "SELECT * FROM scheduled_tasks ORDER BY next_run"
-            )
+            rows = await conn.fetch("SELECT * FROM scheduled_tasks ORDER BY next_run")
     return [_row_to_task(r) for r in rows]
 
 
 async def remove_task(task_id: int) -> bool:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        result = await conn.execute(
-            "DELETE FROM scheduled_tasks WHERE id = $1", task_id
-        )
+        result = await conn.execute("DELETE FROM scheduled_tasks WHERE id = $1", task_id)
     return result.endswith("1")
 
 
@@ -100,7 +98,10 @@ async def mark_executed(task_id: int, schedule_type: str, schedule_value: str) -
             SET last_run = $1, next_run = $2, is_active = $3
             WHERE id = $4
             """,
-            now, next_run, is_active, task_id,
+            now,
+            next_run,
+            is_active,
+            task_id,
         )
 
 

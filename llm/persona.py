@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from db.database import get_pool
 from llm.factory import LLMClient
@@ -12,17 +12,50 @@ log = logging.getLogger("zari")
 CATEGORIES = {"identity", "interest", "preference", "habit", "insight"}
 
 _PERSONA_KEYWORDS = {
-    "mening", "men", "ismim", "familiya", "yoshim", "kasbim",
-    "ishim", "manzil", "yashayman", "tug'ilgan", "o'qiyman",
-    "yoqadi", "yoqtirmayman", "qiziqaman", "hobbi", "mashg'ulot",
-    "dasturchi", "o'qituvchi", "shifokor", "talaba", "o'quvchi",
-    "sevimli", "yaxshi", "xohlayman", "rejam",
-    "oilam", "ukam", "akam", "singlim", "onam", "dadam",
+    "mening",
+    "men",
+    "ismim",
+    "familiya",
+    "yoshim",
+    "kasbim",
+    "ishim",
+    "manzil",
+    "yashayman",
+    "tug'ilgan",
+    "o'qiyman",
+    "yoqadi",
+    "yoqtirmayman",
+    "qiziqaman",
+    "hobbi",
+    "mashg'ulot",
+    "dasturchi",
+    "o'qituvchi",
+    "shifokor",
+    "talaba",
+    "o'quvchi",
+    "sevimli",
+    "yaxshi",
+    "xohlayman",
+    "rejam",
+    "oilam",
+    "ukam",
+    "akam",
+    "singlim",
+    "onam",
+    "dadam",
 }
 
 _PERSONA_PHRASES = [
-    "my name", "i am", "i'm", "i work", "i live", "i like",
-    "i love", "i study", "i hate", "i need",
+    "my name",
+    "i am",
+    "i'm",
+    "i work",
+    "i live",
+    "i like",
+    "i love",
+    "i study",
+    "i hate",
+    "i need",
 ]
 
 _EXTRACTION_COOLDOWN = 30
@@ -77,15 +110,15 @@ class UserPersona:
     async def get(self, key: str) -> str | None:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT value FROM persona WHERE key = $1", key
-            )
+            row = await conn.fetchrow("SELECT value FROM persona WHERE key = $1", key)
             return row["value"] if row else None
 
-    async def set(self, key: str, value: str, category: str = "general", confidence: float = 1.0, source: str = "manual"):
+    async def set(
+        self, key: str, value: str, category: str = "general", confidence: float = 1.0, source: str = "manual"
+    ):
         pool = await get_pool()
         async with pool.acquire() as conn:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             await conn.execute(
                 """INSERT INTO persona (key, value, category, confidence, source, updated_at)
                    VALUES ($1, $2, $3, $4, $5, $6)
@@ -93,7 +126,12 @@ class UserPersona:
                    SET value = $2, category = $3,
                        confidence = $4, source = $5,
                        updated_at = $6""",
-                key, value, category, confidence, source, now,
+                key,
+                value,
+                category,
+                confidence,
+                source,
+                now,
             )
         self._bust_cache()
 
@@ -116,9 +154,7 @@ class UserPersona:
             return list(self._cache.values())
         pool = await get_pool()
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT key, value, category FROM persona ORDER BY category, key"
-            )
+            rows = await conn.fetch("SELECT key, value, category FROM persona ORDER BY category, key")
         self._cache = {r["key"]: dict(r) for r in rows} if rows else {}
         return list(self._cache.values())
 
@@ -196,7 +232,7 @@ class UserPersona:
                     cat = category if category in CATEGORIES else "insight"
                     await self.set(key, value, cat, source="llm")
                     log.info("Persona: %s = %s (%s)", key, value, cat)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.debug("Persona extraction timeout")
         except Exception as e:
             log.debug("Persona extraction error: %s", e)
@@ -223,7 +259,7 @@ class UserPersona:
                 depth -= 1
                 if depth == 0:
                     try:
-                        data = json.loads(text[start:i+1])
+                        data = json.loads(text[start : i + 1])
                         if isinstance(data, list):
                             return data
                     except (json.JSONDecodeError, ValueError):

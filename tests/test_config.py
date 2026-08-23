@@ -1,5 +1,3 @@
-
-
 from core.config import Settings
 
 
@@ -16,7 +14,7 @@ class TestSettings:
         assert s.llm_provider == "ollama"
         assert s.wake_word == "jarvis"
         assert s.tts_voice == "uz-UZ-MadinaNeural"
-        assert s.enable_translation == False
+        assert s.enable_translation is False
         assert s.whisper_language == "uz"
         assert s.log_level == "INFO"
 
@@ -27,7 +25,7 @@ class TestSettings:
             ollama_model="llama3",
             groq_model="llama-3.1-8b-instant",
             llm_provider="ollama",
-            wake_word="zari"
+            wake_word="zari",
         )
         assert s.ollama_url == "http://custom:11434"
         assert s.ollama_model == "llama3"
@@ -45,11 +43,7 @@ class TestSettings:
 
     def test_audio_device_settings(self):
         """Test audio device configuration"""
-        s = Settings(
-            audio_input_device=1,
-            audio_output_device=2,
-            audio_output_sample_rate=44100
-        )
+        s = Settings(audio_input_device=1, audio_output_device=2, audio_output_sample_rate=44100)
         assert s.audio_input_device == 1
         assert s.audio_output_device == 2
         assert s.audio_output_sample_rate == 44100
@@ -61,10 +55,7 @@ class TestSettings:
         assert s.telegram_token == ""
         assert s.email_address == ""
 
-        s2 = Settings(
-            telegram_token="test_token",
-            email_address="test@example.com"
-        )
+        s2 = Settings(telegram_token="test_token", email_address="test@example.com")
         assert s2.telegram_token == "test_token"
         assert s2.email_address == "test@example.com"
 
@@ -99,7 +90,7 @@ class TestSettings:
     def test_translation_disabled(self):
         """Test disabling translation"""
         s = Settings(enable_translation=False)
-        assert s.enable_translation == False
+        assert s.enable_translation is False
 
     def test_log_level_variations(self):
         """Test different log levels"""
@@ -121,10 +112,7 @@ class TestSettings:
 
     def test_custom_db_and_redis(self):
         """Test custom database and Redis URLs"""
-        s = Settings(
-            database_url="postgresql://user:pass@remote/db",
-            redis_url="redis://remote:6380"
-        )
+        s = Settings(database_url="postgresql://user:pass@remote/db", redis_url="redis://remote:6380")
         assert s.database_url == "postgresql://user:pass@remote/db"
         assert s.redis_url == "redis://remote:6380"
 
@@ -136,10 +124,7 @@ class TestSettings:
 
     def test_type_coercion(self):
         """Test type coercion for numeric settings"""
-        s = Settings(
-            audio_input_device=None,
-            audio_output_sample_rate=48000
-        )
+        s = Settings(audio_input_device=None, audio_output_sample_rate=48000)
         assert s.audio_input_device is None
         assert isinstance(s.audio_output_sample_rate, int)
 
@@ -155,8 +140,7 @@ class TestSettingsEdgeCases:
     def test_special_characters_in_settings(self):
         """Test with special characters in URLs"""
         s = Settings(
-            database_url="postgresql://user:p@ss$w0rd@host/db?param=value",
-            redis_url="redis://:p@ssw0rd@localhost:6379"
+            database_url="postgresql://user:p@ss$w0rd@host/db?param=value", redis_url="redis://:p@ssw0rd@localhost:6379"
         )
         assert "@" in s.database_url
         assert "@" in s.redis_url
@@ -169,9 +153,6 @@ class TestSettingsEdgeCases:
 
     def test_unicode_in_settings(self):
         """Test with unicode characters"""
-        s = Settings(
-            wake_word="зари",
-            tts_voice="uz-UZ-MadinaNeural"
-        )
+        s = Settings(wake_word="зари", tts_voice="uz-UZ-MadinaNeural")
         assert s.wake_word == "зари"
         assert s.tts_voice == "uz-UZ-MadinaNeural"

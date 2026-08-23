@@ -153,7 +153,7 @@ Foydalanuvchi → Mikrofon → STT (Whisper) → Router → LLM (Groq/llama) →
 ```python
 STT_CORRECTIONS = {
     "enxten": "Einstein",
-    "enxte": "Einstein", 
+    "enxte": "Einstein",
     "enste": "Einstein",
     "telefram": "Telegram",
     "paison": "Python",
@@ -163,6 +163,7 @@ STT_CORRECTIONS = {
     "kortana": "Cortana",
     "vindovs": "Windows",
 }
+
 
 def correct_stt(text: str) -> str:
     for wrong, correct in STT_CORRECTIONS.items():
@@ -210,6 +211,7 @@ MAX_MESSAGES = 10
 
 # Har 30 daqiqada eski xabarlarni tozalash
 MEMORY_TTL = 1800  # seconds
+
 
 # Session yangilash
 async def clean_old_messages():
