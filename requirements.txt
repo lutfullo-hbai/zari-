@@ -26,3 +26,5 @@ pypdf>=4.0
 python-docx>=1.1
 openpyxl>=3.1
 playwright>=1.40
+# pkg_resources uchun (ba'zi paketlar import qiladi)
+setuptools>=69
