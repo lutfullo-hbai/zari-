@@ -314,6 +314,8 @@ cd zari
 cp .env.example .env          # .env ni o'zingizga moslang
 make db-up                    # PostgreSQL + Redis (docker)
 pip install -r requirements.txt
+# Ixtiyoriy: "Zari" wake-word va oflayn TTS
+pip install -r requirements-voice.txt && playwright install chromium
 python -m core.main           # ovoz rejimi
 ```
 

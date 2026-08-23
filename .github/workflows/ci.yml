@@ -16,7 +16,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install ruff
+      # Lokal dev bilan bir xil versiya — import tartibi farqlanmasligi uchun
+      - run: pip install ruff==0.16.3
       - run: ruff check .
       - run: ruff format --check .
 
@@ -64,6 +65,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio
+          # pytest versiyalari lokal muhitga mos (9.x / 1.x)
+          pip install "pytest>=8,<10" "pytest-asyncio>=1,<2"
       - name: Testlar (haqiqiy PostgreSQL + Redis bilan)
         run: pytest -q --tb=short
