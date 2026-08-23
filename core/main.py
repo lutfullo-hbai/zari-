@@ -515,6 +515,8 @@ class ZariPipeline:
         ]
 
         self.spawn_background(self._run_habit_analysis(), "habit-analysis")
+        self.spawn_background(self._run_scheduler(), "scheduler")
+        # Ovozli rejimda ham scheduler ishlashi kerak — eslatmalar TTS bilan aytiladi
 
         log.info("Zari ishga tushdi (supervised)")
 
@@ -567,12 +569,22 @@ class ZariPipeline:
         except Exception as e:
             log.warning("Odat tahlili xatosi (kritik emas): %s", e)
 
-    async def _run_scheduler(self):
+    async def _run_scheduler(self) -> None:
         try:
             await init_scheduler_table()
-            await run_scheduler_loop(self.text_queue, interval=30.0)
         except Exception as e:
-            log.warning("Scheduler xatosi (kritik emas): %s", e)
+            log.warning("Scheduler jadvalini yaratish xatosi: %s", e)
+            return
+
+        while True:
+            try:
+                await run_scheduler_loop(self.text_queue, interval=30.0)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                # Postgres vaqtincha uzilsa — loop o'lib qolmasin, qayta urinsin
+                log.warning("Scheduler xatosi, 5 soniyadan keyin qayta urinadi: %s", e)
+                await asyncio.sleep(5)
 
     async def stop(self):
         self.running = False

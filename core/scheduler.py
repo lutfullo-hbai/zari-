@@ -8,7 +8,7 @@ Pipeline text_queue orqali trigger qiladi.
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from core.messages import Incoming
 from db.database import get_pool
@@ -142,27 +142,75 @@ async def run_scheduler_loop(text_queue: asyncio.Queue[str], interval: float = 3
 def _calculate_next_run(schedule_type: str, schedule_value: str) -> datetime | None:
     now = datetime.now(UTC)
     if schedule_type == "once":
-        return now
+        # "once" — schedule_value: ISO datetime yoki "HH:MM".
+        # Parse bo'lmasa (eski ma'lumot/bo'sh) — darhol bajarish.
+        parsed = _parse_once_value(schedule_value, now)
+        return parsed
     if schedule_type == "daily":
         try:
             hour, minute = schedule_value.split(":")
             target = now.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
             if target <= now:
-                from datetime import timedelta
                 target += timedelta(days=1)
             return target
         except (ValueError, AttributeError):
-            from datetime import timedelta
             return now + timedelta(days=1)
     if schedule_type == "interval":
         try:
             minutes = int(schedule_value)
-            from datetime import timedelta
             return now + timedelta(minutes=minutes)
         except (ValueError, AttributeError):
-            from datetime import timedelta
             return now + timedelta(hours=1)
     return now
+
+
+def _parse_once_value(value: str, now: datetime) -> datetime:
+    """
+    'once' qiymatini parse qiladi: ISO datetime, ISO date yoki "HH:MM".
+
+    - Faqat vaqt ("10:00") → bugungi kun, o'tib bo'lsa ertaga.
+    - Sana+vaqt / ISO → to'g'ridan-to'g'ri.
+    - Naive datetime UTC deb qabul qilinadi.
+    - Parse muvaffaqiyatsiz → hozir (darhol bajarish).
+    """
+    value = (value or "").strip()
+    if not value:
+        return now
+
+    target = _try_parse_datetime(value)
+    if target is None:
+        target = _try_parse_time_only(value, now)
+    if target is None:
+        log.warning("Scheduler: 'once' qiymatini parse qilib bo'lmadi: '%s' — darhol bajariladi", value)
+        return now
+
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=UTC)
+    return target
+
+
+def _try_parse_datetime(value: str) -> datetime | None:
+    candidate = value.replace("Z", "+00:00") if value.endswith("Z") else value
+    try:
+        return datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+
+
+def _try_parse_time_only(value: str, now: datetime) -> datetime | None:
+    parts = value.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return target
 
 
 def _row_to_task(row) -> ScheduledTask:
