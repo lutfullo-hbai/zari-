@@ -115,8 +115,11 @@ class TestGroqClient:
 class TestTranslator:
     """Test Translator functionality"""
 
-    def test_init(self):
-        """Test Translator initialization"""
+    def test_init(self, monkeypatch):
+        """Test Translator initialization (muhitdan mustaqil — Groq majburiy)."""
+        from core.config import settings
+
+        monkeypatch.setattr(settings, "llm_provider", "groq")
         with patch("llm.groq_client.Groq"):
             translator = Translator()
             assert translator._llm.model == "llama-3.3-70b-versatile"
