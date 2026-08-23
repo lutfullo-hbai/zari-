@@ -26,6 +26,7 @@ class N8nWorkflowSkill(BaseSkill):
     priority = 35
     timeout = 30.0
     requires_confirmation = True
+    confirmation_type = "danger"
 
     def __init__(self):
         self._client = N8nTemplatesClient()

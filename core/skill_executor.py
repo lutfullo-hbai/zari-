@@ -146,8 +146,10 @@ class SkillExecutor:
             # Brain action ham, javob ham bermadi — regex yo'lga qaytamiz
             return await self.match_and_execute(text, request_id)
 
-        # Xavfsizlik devori: Brain LLM'i xavfli skill'ni avtomatik bajara olmaydi.
-        # requires_confirmation bo'lgan skill faqat dialog tasdig'idan keyin ishlaydi.
+        # Xavfsizlik devori (PRE-SKAN): Brain to'liq reja qaytaradi, lekin
+        # bajarish boshlanishidan OLDIN har bir qadam tekshiriladi.
+        # Birinchi xavfli qadamda BUTUN zanjir bekor bo'ladi — qolgan
+        # xavfsiz qadamlar ham bajarilmaydi (abort, pauza emas).
         for action in decision.actions:
             skill = self.get_skill(action.skill)
             if skill is None:
