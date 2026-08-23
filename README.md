@@ -209,13 +209,13 @@ zari/
 
 ---
 
-### Milestone 7 — Hujjatlar va Kod 🔜
+### Milestone 7 — Hujjatlar va Kod ✅
 **Muddat: 1 hafta**
 
-- [ ] PDF o'qish + LLM xulosa
-- [ ] Word/Excel yaratish va tahrir (python-docx, openpyxl)
-- [ ] Papkalarni tartibga solish
-- [ ] Code Runner — kod yozib ishga tushirish (sandbox'da)
+- [x] PDF/DOCX/XLSX/CSV/TXT o'qish (pypdf, python-docx, openpyxl) + Brain orqali xulosa
+- [x] Word/Excel yaratish ("excel jadval yarat", "word hujjat yarat")
+- [x] Papkalarni tartibga solish (`organize`) — tasdiq bilan, ustma-ust yozish taqiqlangan
+- [x] Code Runner — subprocess izolyatsiya + timeout 30s + MAJBURIY tasdiq
 
 ---
 

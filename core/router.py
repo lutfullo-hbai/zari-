@@ -11,8 +11,11 @@ INTENT_PRIORITY: dict[str, int] = {
     "brightness": 76,
     "media": 52,
     "input": 45,
+    "code_runner": 40,
     "screenshot": 80,
     "filemanager": 80,
+    "organize": 82,
+    "documents": 70,
     "weather": 70,
     "timer": 65,
     "calculator": 60,
@@ -36,6 +39,8 @@ INTENT_PATTERNS: dict[str, str] = {
         r"\b(kompyuter\w*|tizim\w*|system\w*|protsessor\w*|CPU|cpu|ram\w*|"
         r"xotira\w*|disk\w*|uptime|python\w*|versiya\w*|holat\w*|ma'lumot)\b"
     ),
+    "organize": r"\b(tartibga sol\w*|tartibla|sarala\w*|organize)\b",
+    "documents": r"\b(pdf\w*|docx?\b|hujjat\w*|excel\w*|xlsx?\b|jadval fayl|powerpoint|pptx?)\b",
     "email": r"\b(gmail|email|mail|xat|yubor|send)\b",
     "music": r"\b(musiqa\w*|qo.?y\w*|qo.?shiq\w*|music\w*|song\w*|play\w*|tingla\w*|yoq\w*)\b",
     "workflow": (
@@ -62,6 +67,7 @@ INTENT_PATTERNS: dict[str, str] = {
         r"keyboard\w*|tugma\w*|enter\b|entir\b|escape\b|esc\b|"
         r"strelka\w*|ctrl\+\w+)\b"
     ),
+    "code_runner": r"\b(kodni ishga\w*|kod yozib|ishga tushir kod|run kod|skriptni ishga)\b",
     "chat": r".*",
 }
 
