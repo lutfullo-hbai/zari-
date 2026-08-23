@@ -149,3 +149,71 @@ class TestBrainKnowsBrowser:
         from core.brain import AVAILABLE_SKILLS
 
         assert "browser" in AVAILABLE_SKILLS
+
+
+class TestYouTubePlay:
+    @pytest.fixture
+    def skill(self):
+        from skills.browser import BrowserSkill
+
+        s = BrowserSkill()
+        yield s
+        s.close()
+
+    def test_term_extraction(self, skill):
+        assert skill._youtube_term("youtube da lofi hip hop qo'y") == "lofi hip hop"
+        assert skill._youtube_term("youtube da remix play") == "remix"
+        assert skill._youtube_term("youtube och") == ""
+
+    @pytest.mark.asyncio
+    async def test_play_opens_visible_browser(self, skill):
+        with (
+            patch.object(
+                skill,
+                "_first_video",
+                return_value=("https://www.youtube.com/watch?v=abc", "Lofi Radio"),
+            ),
+            patch("skills.browser.subprocess.Popen") as mock_open,
+        ):
+            result = await skill.execute("youtube da lofi qo'y")
+
+        assert result is not None
+        assert "ochildi" in result["response"]
+        assert "Lofi Radio" in result["response"]
+        opened = mock_open.call_args.args[0]
+        assert opened == ["xdg-open", "https://www.youtube.com/watch?v=abc"]
+
+    @pytest.mark.asyncio
+    async def test_play_fallback_to_search_url(self, skill):
+        """_first_video bo'sh qaytarsa — qidiruv sahifasi ochiladi."""
+        with (
+            patch.object(skill, "_first_video", return_value=("", "")),
+            patch("skills.browser.subprocess.Popen") as mock_open,
+        ):
+            result = await skill.execute("youtube da jazz qo'y")
+
+        assert result is not None
+        opened_url = mock_open.call_args.args[0][1]
+        assert "search_query=jazz" in opened_url
+
+    @pytest.mark.asyncio
+    async def test_empty_term_prompts_user(self, skill):
+        result = await skill.execute("youtube da qo'y")
+        assert "Nima ijro etish" in result["response"]
+
+    @pytest.mark.asyncio
+    async def test_no_confirmation_bypass(self, skill):
+        """Ijro ham tasdiqsiz O'TMASLIGI kerak (skill darajasi)."""
+        assert skill.requires_confirmation is True
+
+    @pytest.mark.asyncio
+    async def test_read_still_works_for_youtube_without_play_words(self, skill):
+        """'youtube och' (qo'y so'zi yo'q) — oddiy o'qish rejimi."""
+        with patch.object(
+            skill,
+            "_browse",
+            return_value=("YouTube", "Sahifa matni"),
+        ) as mock_browse:
+            await skill.execute("youtube saytini och")
+
+        assert mock_browse.call_args.args[0] == "https://www.youtube.com"

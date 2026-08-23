@@ -7,6 +7,7 @@ o'zini o'chiradi (openwakeword patterni).
 import asyncio
 import logging
 import re
+import subprocess
 from urllib.parse import quote_plus, urlparse
 
 from skills.base import BaseSkill
@@ -63,6 +64,11 @@ class BrowserSkill(BaseSkill):
         text = query.lower()
         if not self._is_browser_intent(text):
             return None
+
+        # YouTube IJRO: "...qo'y"/"...ijro et" — videoni topib KO'RINADIGAN
+        # brauzerda ochamiz (headless ovoz bermaydi).
+        if "youtube" in text and any(w in text for w in ["qo'y", "quy", "ijro", "play", "yoq"]):
+            return await self._youtube_play(query)
 
         if not PW_AVAILABLE:
             return {
@@ -162,6 +168,75 @@ class BrowserSkill(BaseSkill):
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=True)
         return self._browser
+
+    @staticmethod
+    def _youtube_term(query: str) -> str:
+        m = re.search(
+            r"(?:youtube da|youtube'da)\s+(.+?)\s*"
+            r"(?:ni |noma |qo'y(?:ib)? ?(?:ber)?|quy|ijro|play|yoq|$)",
+            query,
+            re.IGNORECASE,
+        )
+        term = m.group(1).strip() if m else ""
+        return re.sub(r"\b(qo'y|quy|ijro et|play|yoq|ber)\b", "", term).strip()
+
+    async def _youtube_play(self, query: str) -> dict:
+        """Qidiruv → birinchi video → xdg-open bilan KO'RINADIGAN brauzerda."""
+        term = self._youtube_term(query)
+        if not term:
+            return {
+                "response": "Nima ijro etish kerak? Masalan: 'youtube da lofi qo'y'.",
+                "context": "",
+                "source": "browser",
+            }
+
+        video_url: str | None = None
+        title = ""
+
+        if PW_AVAILABLE:
+            loop = asyncio.get_running_loop()
+            try:
+                search_url = "https://www.youtube.com/results?search_query=" + quote_plus(term)
+                video_url, title = await loop.run_in_executor(None, self._first_video, search_url)
+            except Exception as e:
+                log.warning("YouTube qidiruv xato: %s", e)
+
+        target = video_url or ("https://www.youtube.com/results?search_query=" + quote_plus(term))
+        try:
+            subprocess.Popen(
+                ["xdg-open", target],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            log.warning("Brauzer ochilmadi: %s", e)
+            return {
+                "response": f"Brauzer ochilmadi: {e}"[:200],
+                "context": "",
+                "source": "browser",
+            }
+
+        where = f"'{title}'" if title else f"'{term}' bo'yicha natijalar"
+        return {
+            "response": f"▶ YouTube'da {where} ochildi.",
+            "context": target,
+            "source": "browser",
+        }
+
+    def _first_video(self, search_url: str) -> tuple[str, str]:
+        browser = self._get_browser()
+        page = browser.new_page()
+        try:
+            page.goto(search_url, timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+            page.wait_for_timeout(1500)
+            for el in page.query_selector_all("a#video-title"):
+                href = el.get_attribute("href")
+                if href and "/watch" in href:
+                    url = "https://www.youtube.com" + href.split("&")[0]
+                    return url, (el.inner_text() or "").split("\n")[0][:80]
+            return "", ""
+        finally:
+            page.close()
 
     def _browse(self, url: str) -> tuple[str, str]:
         browser = self._get_browser()

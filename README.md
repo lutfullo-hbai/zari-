@@ -225,7 +225,8 @@ zari/
 - [x] Playwright integratsiya (skill sifatida) — sayt ochish, matn o'qish,
       YouTube/Google qidiruv; brauzer instansiya qayta ishlatiladi
 - [ ] Google Sheets/Docs/Gmail browser orqali
-- [ ] YouTube to'liq boshqaruv (qidirish ✓, ijro boshqaruvi qolmoqda)
+- [x] YouTube qidirish + ijro ("youtube da lofi qo'y" → birinchi video
+      ko'rinadigan brauzerda ochildi — headless ovoz bermasligi uchun)
 - [ ] Form to'ldirish, ma'lumot olish, ticket bron
 - ✅ Pul ketadigan harakatlarga zamin: skill darajasida tasdiq MAJBURIY
 
