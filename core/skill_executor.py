@@ -104,7 +104,7 @@ class SkillExecutor:
             await self._respond(question, request_id)
             return None, True
 
-        if intent in ("music", "weather", "timer", "note"):
+        if intent in ("music", "weather", "timer", "notes"):
             if self._dialog.begin(intent, text):
                 question = self._dialog.next_question()
                 await self._respond(question, request_id)

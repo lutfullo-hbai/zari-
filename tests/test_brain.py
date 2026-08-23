@@ -102,5 +102,5 @@ class TestAvailableSkills:
         assert len(AVAILABLE_SKILLS) > 0
 
     def test_common_skills_present(self):
-        for s in ["weather", "search", "email", "timer", "note"]:
+        for s in ["weather", "search", "email", "timer", "notes"]:
             assert s in AVAILABLE_SKILLS

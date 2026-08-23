@@ -12,7 +12,7 @@ INTENT_PRIORITY: dict[str, int] = {
     "weather": 70,
     "timer": 65,
     "calculator": 60,
-    "note": 55,
+    "notes": 55,
     "music": 50,
     "email": 40,
     "workflow": 35,
@@ -37,7 +37,7 @@ INTENT_PATTERNS: dict[str, str] = {
         r"\b(workflow|flow|automation|template|n8n|telegram|slack|"
         r"google sheets|sheet|webhook|valyuta|oltin|currency)\b"
     ),
-    "note": r"\b(yozib ol|esla|eslatma|note|saqla|yodda)\b",
+    "notes": r"\b(yozib ol|esla|eslatma|note|saqla|yodda)\b",
     "timer": r"\b(timer|daqiqa|soniya|minut|sekund|vaqt o.lcha)\b",
     "calculator": r"\b(hisobla|calculate|necha bo.ladi)\b",
     "clipboard": r"\b(clipboard|buffer|nusxa)\b",

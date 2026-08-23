@@ -22,7 +22,7 @@ AVAILABLE_SKILLS = [
     "email",
     "music",
     "workflow",
-    "note",
+    "notes",
     "timer",
     "calculator",
     "clipboard",

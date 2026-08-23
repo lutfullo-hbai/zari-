@@ -25,7 +25,7 @@ SKILL_PARAMS: dict[str, list[str]] = {
     "music": ["song"],
     "weather": ["city"],
     "timer": ["duration"],
-    "note": ["content"],
+    "notes": ["content"],
     "search": ["query"],
     "filemanager": [],
     "email": ["target", "content"],
