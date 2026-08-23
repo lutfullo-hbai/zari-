@@ -1,6 +1,7 @@
 import asyncio
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.config import settings
 from llm.factory import create_llm_client

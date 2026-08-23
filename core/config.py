@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # LLM provayderni tanlash: "groq" | "ollama"
     llm_provider: str = "groq"
 
+    # Agent Brain — ko'p intentli murakkab so'rovlarda LLM reja tuzadi
+    enable_brain: bool = True
+
     database_url: str = "postgresql:///zari"
     redis_url: str = "redis://localhost:6379/0"
 

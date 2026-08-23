@@ -10,6 +10,7 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+from core.brain import AgentBrain
 from core.config import settings
 from core.dialog_state import DialogManager
 from core.logging import get_logger
@@ -48,6 +49,7 @@ class ZariPipeline:
         self.dialog = DialogManager()
 
         self.llm = create_llm_client()
+        self.brain = AgentBrain() if settings.enable_brain else None
         self.translator = Translator(client=self.llm) if settings.enable_translation else None
 
         self._init_skills()
@@ -344,6 +346,55 @@ class ZariPipeline:
                 return response, True
         return None, False
 
+    async def _route_and_execute(
+        self, text: str, request_id: str | None
+    ) -> tuple[str | None, bool]:
+        """
+        Yo'naltirish: 1 intent → tez yo'l, ko'p intent → Agent Brain zanjiri.
+        """
+        matched = match_intents(text)
+        if len(matched) <= 1 or self.brain is None:
+            return await self._match_and_execute_skills(text, request_id)
+
+        decision = await self.brain.decide(text, matched_intents=matched)
+
+        if len(decision.actions) <= 1 and not decision.needs_clarification:
+            # Brain oddiy yo'lni tanladi yoki hech narsa — eski oqim
+            return await self._match_and_execute_skills(text, request_id)
+
+        if decision.needs_clarification and decision.clarification_question:
+            await self._respond(decision.clarification_question, request_id)
+            return None, True
+
+        if not decision.actions:
+            if decision.response:
+                await self._respond(decision.response, request_id)
+                return decision.response, True
+            return None, False
+
+        # Brain zanjiri — har bir action ketma-ket bajariladi
+        responses: list[str] = []
+        for action in decision.actions:
+            skill = self._get_skill(action.skill)
+            if skill is None:
+                log.warning("Brain nomalum skill buyurdi: %s", action.skill)
+                continue
+            query = str(action.params.get("query", text))
+            result = await skill.execute_with_retry(query)
+            if result and result.get("response"):
+                responses.append(result["response"])
+                ctx = result.get("context", "")
+                await self.memory.add(
+                    "system",
+                    f"{action.skill} natijasi: {ctx or result['response']}",
+                )
+
+        if not responses:
+            return None, False
+
+        combined = "\n".join(responses)
+        return combined, True
+
     async def _llm_fallback(self, llm_input: str) -> str:
         for _ in range(2):
             try:
@@ -413,7 +464,7 @@ class ZariPipeline:
                     else:
                         response, skill_responded = None, False
                 else:
-                    response, skill_responded = await self._match_and_execute_skills(
+                    response, skill_responded = await self._route_and_execute(
                         text, request_id
                     )
 

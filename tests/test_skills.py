@@ -1,8 +1,10 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from skills.search import SearchSkill
+
 from skills.base import BaseSkill
 from skills.loader import SkillLoader
+from skills.search import SearchSkill
 
 
 class TestBaseSkill:
@@ -189,7 +191,6 @@ class TestMusicSkill:
     @pytest.mark.asyncio
     async def test_music_skill_loader_discovers(self):
         """Test that SkillLoader finds MusicSkill"""
-        from skills.music import MusicSkill
         loader = SkillLoader(package_name="skills")
         discovered = loader.discover()
 

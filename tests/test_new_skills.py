@@ -1,7 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from skills.base import BaseSkill
+import pytest
 
 
 class TestCalculatorSkill:
@@ -118,8 +117,8 @@ class TestTimerSkill:
 class TestWeatherSkill:
     @pytest.mark.asyncio
     async def test_weather_with_api_key(self):
-        from skills.weather import WeatherSkill
         from core.config import settings
+        from skills.weather import WeatherSkill
         old_key = settings.weather_api_key
         settings.weather_api_key = "test-key"
         skill = WeatherSkill()
@@ -140,8 +139,8 @@ class TestWeatherSkill:
 
     @pytest.mark.asyncio
     async def test_weather_no_city(self):
-        from skills.weather import WeatherSkill
         from core.config import settings
+        from skills.weather import WeatherSkill
         old = settings.weather_api_key
         settings.weather_api_key = ""
         skill = WeatherSkill()
@@ -152,8 +151,8 @@ class TestWeatherSkill:
 
     @pytest.mark.asyncio
     async def test_weather_api_404(self):
-        from skills.weather import WeatherSkill
         from core.config import settings
+        from skills.weather import WeatherSkill
         old_key = settings.weather_api_key
         settings.weather_api_key = "test-key"
         skill = WeatherSkill()

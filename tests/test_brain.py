@@ -1,6 +1,8 @@
 import json
 from unittest.mock import AsyncMock
 
+import pytest
+
 from core.brain import AVAILABLE_SKILLS, Action, AgentBrain, Decision
 
 
@@ -18,16 +20,15 @@ class TestDecision:
 
 
 class TestAgentBrainDecide:
-    def test_single_intent_returns_directly(self):
+    @pytest.mark.asyncio
+    async def test_single_intent_returns_directly(self):
         brain = AgentBrain()
-        import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
-            brain.decide("salom", matched_intents=["chat"])
-        )
+        decision = await brain.decide("salom", matched_intents=["chat"])
         assert len(decision.actions) == 1
         assert decision.actions[0].skill == "chat"
 
-    def test_empty_intents_calls_llm(self):
+    @pytest.mark.asyncio
+    async def test_empty_intents_calls_llm(self):
         brain = AgentBrain()
         brain._llm = AsyncMock()
         brain._llm.chat_async = AsyncMock(return_value=json.dumps({
@@ -35,23 +36,25 @@ class TestAgentBrainDecide:
             "response": "",
             "needs_clarification": False,
         }))
-        import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
-            brain.decide("Toshkentda ob-havo qanday")
-        )
+        decision = await brain.decide("Toshkentda ob-havo qanday")
         assert len(decision.actions) == 1
         assert decision.actions[0].skill == "weather"
         assert decision.actions[0].params.get("city") == "Toshkent"
 
-    def test_llm_error_returns_clarification(self):
+    @pytest.mark.asyncio
+    async def test_llm_error_returns_clarification(self):
         brain = AgentBrain()
         brain._llm = AsyncMock()
         brain._llm.chat_async = AsyncMock(side_effect=Exception("llm down"))
-        import asyncio
-        decision = asyncio.get_event_loop().run_until_complete(
-            brain.decide("murakkab so'rov", matched_intents=[])
-        )
+        decision = await brain.decide("murakkab so'rov", matched_intents=[])
         assert decision.needs_clarification is True
+
+    @pytest.mark.asyncio
+    async def test_lazy_llm_not_created_on_fast_path(self):
+        """Single intent — LLM client umuman yaratilmasligi kerak."""
+        brain = AgentBrain()
+        await brain.decide("salom", matched_intents=["chat"])
+        assert brain._llm is None
 
 
 class TestBrainParsePlan:

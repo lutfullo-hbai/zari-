@@ -66,7 +66,13 @@ class AgentBrain:
     """LLM-based Decision Engine — murakkab so'rovlar uchun reja tuzadi."""
 
     def __init__(self) -> None:
-        self._llm = create_llm_client()
+        self._llm = None
+
+    def _get_llm(self):
+        """Lazy init — konstruktor og'ir dependency'larga bog'lanmasin."""
+        if self._llm is None:
+            self._llm = create_llm_client()
+        return self._llm
 
     async def decide(
         self,
@@ -107,7 +113,7 @@ class AgentBrain:
         )
 
         try:
-            raw = await self._llm.chat_async(
+            raw = await self._get_llm().chat_async(
                 [{"role": "user", "content": prompt}],
                 timeout=30,
             )

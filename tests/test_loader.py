@@ -1,5 +1,5 @@
-from skills.loader import SkillLoader
 from skills.base import BaseSkill
+from skills.loader import SkillLoader
 
 
 def test_skill_loader_discovers_concrete_skills():

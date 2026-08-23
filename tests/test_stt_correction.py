@@ -1,7 +1,8 @@
 import sys
+
 sys.path.insert(0, "/home/lutfullo/bor/forlearnproject/zari/zari-")
 
-from voice.stt import correct_stt, STT_CORRECTIONS
+from voice.stt import correct_stt
 
 
 def test_einstein_corrections():
@@ -41,7 +42,7 @@ def test_full_sentence():
     text = "Menga enxten haqida ayting"
     result = correct_stt(text)
     assert result == "Menga Einstein haqida ayting"
-    
+
     text2 = "telefram ochish kerak"
     result2 = correct_stt(text2)
     assert result2 == "Telegram ochish kerak"

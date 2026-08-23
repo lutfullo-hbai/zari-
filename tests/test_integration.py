@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 def _make_groq_response(content: str):
@@ -18,8 +19,8 @@ class TestPipelineIntegration:
     @pytest.mark.asyncio
     async def test_memory_and_router_integration(self):
         """Test memory stores messages correctly after routing"""
-        from llm.memory import SessionMemory
         from core.router import route
+        from llm.memory import SessionMemory
 
         with patch('db.memory_repo.create_session', return_value='test-session'):
             with patch('db.memory_repo.save_message', new_callable=AsyncMock):
@@ -41,8 +42,8 @@ class TestPipelineIntegration:
     @pytest.mark.asyncio
     async def test_translator_and_llm_integration(self):
         """Test translation flows through to LLM"""
-        from llm.translator import Translator
         from llm.groq_client import GroqClient
+        from llm.translator import Translator
 
         mock_groq = MagicMock()
         mock_groq.chat.completions.create.return_value = _make_groq_response("Hello")
@@ -118,8 +119,8 @@ class TestAsyncErrorHandling:
     @pytest.mark.asyncio
     async def test_translator_timeout(self):
         """Test translator returns original text on timeout"""
-        from llm.translator import Translator
         from llm.groq_client import GroqClient
+        from llm.translator import Translator
 
         mock_groq = MagicMock()
 
@@ -197,7 +198,7 @@ class TestPipelineQueueHandling:
 
         try:
             await asyncio.wait_for(queue.get(), timeout=0.05)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
         assert response == "Kechirasiz, javob berolmayman."

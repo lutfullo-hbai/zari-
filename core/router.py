@@ -160,35 +160,3 @@ def should_use_llm_routing(confidence: float) -> bool:
         True if LLM should be used for disambiguation
     """
     return confidence < CONFIDENCE_THRESHOLD
-
-
-def disambiguate_with_llm(text: str, candidates: list[str]) -> str:
-    """
-    LLM orqali nom aniqliklarni hal qiladi.
-
-    Agent Brain ishlatilmaganda, past confidence bilan
-    qaysi intent tanlash kerakligini LLM ga so'raydi.
-    """
-    if not candidates:
-        return "chat"
-    if len(candidates) == 1:
-        return candidates[0]
-
-    import asyncio
-
-    from core.brain import AgentBrain
-
-    brain = AgentBrain()
-    try:
-        loop = asyncio.get_running_loop()
-        decision = loop.run_until_complete(
-            brain.decide(text, matched_intents=candidates)
-        )
-        if decision.actions:
-            return decision.actions[0].skill
-    except RuntimeError:
-        pass
-    except Exception as e:
-        log.warning("LLM disambiguation xatosi: %s", e)
-
-    return candidates[0]

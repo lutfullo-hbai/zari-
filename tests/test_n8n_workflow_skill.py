@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from skills.n8n_workflow import N8nWorkflowSkill
 
 
