@@ -6,6 +6,18 @@ Zari — ovoz bilan boshqariladigan, kompyutеr ichida yashaydigan, foydalanuvch
 
 ---
 
+## Holat (2026-08)
+
+- **320 test** yashil, ruff to'liq toza, pre-commit yoqilgan
+- **Web API auth**: `WEB_API_KEY` o'rnatilsa barcha `/api/*` va WebSocket himoyalanadi
+- **Agent Brain**: ko'p intentli so'rovlarda LLM reja tuzadi (`ENABLE_BRAIN=true`, default)
+- **Scheduler**: voice rejimda ham ishlaydi; `once` vazifalar aniq vaqtda trigger bo'ladi
+- **DB**: PostgreSQL 5434 portda, schema faqat alembic migratsiyalari orqali (`alembic upgrade head`)
+- **Default provider**: Ollama (local-first); Groq uchun `.env` da `LLM_PROVIDER=groq`
+- Batafsil tahlil: `REVIEW.md`, `FIXES.md`, `MIGRATION.md`
+
+---
+
 ## Maqsad
 
 5 yil ichida Zari quyidagiga aylanadi:
@@ -245,6 +257,19 @@ EMAIL_ADDRESS=
 # Qidiruv backend'i
 SEARCH_BACKEND=auto
 PERPLEXICA_URL=http://localhost:3000
+
+# Web API himoyasi (bo'sh = auth o'chiq, dev uchun)
+WEB_API_KEY=
+
+# Agent Brain (ko'p intentli so'rovlarda LLM reja tuzadi)
+ENABLE_BRAIN=true
+
+# UZ->EN tarjima zanjiri (default: o'chiq — O'zbekcha to'g'ridan ishlaydi)
+ENABLE_TRANSLATION=false
+
+# Baza (docker compose db → 5434 port!)
+DATABASE_URL=postgresql://zari:zari@localhost:5434/zari
+REDIS_URL=redis://localhost:6380/0
 ```
 
 ### SMTP / Email
@@ -292,4 +317,3 @@ Hozircha shaxsiy loyiha. Keyinchalik ochiq manba bo'lishi mumkin.
 ## Litsenziya
 
 MIT
-
