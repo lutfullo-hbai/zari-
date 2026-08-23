@@ -7,6 +7,10 @@ log = logging.getLogger("zari")
 INTENT_PRIORITY: dict[str, int] = {
     "network": 85,
     "clipboard": 80,
+    "volume": 78,
+    "brightness": 76,
+    "media": 52,
+    "input": 45,
     "screenshot": 80,
     "filemanager": 80,
     "weather": 70,
@@ -29,10 +33,11 @@ INTENT_PATTERNS: dict[str, str] = {
     "time": r"\b(soat necha|vaqt necha|kun necha|soat|time|bugun)\b",
     "system": r"\b(och|yop|run|execute|open|close)\b",
     "system_info": (
-        r"\b(kompyuter|tizim|system|protsessor|CPU|cpu|ram|xotira|disk|" r"uptime|python|versiya|holat|ma'lumot)\b"
+        r"\b(kompyuter\w*|tizim\w*|system\w*|protsessor\w*|CPU|cpu|ram\w*|"
+        r"xotira\w*|disk\w*|uptime|python\w*|versiya\w*|holat\w*|ma'lumot)\b"
     ),
     "email": r"\b(gmail|email|mail|xat|yubor|send)\b",
-    "music": r"\b(musiqa|qo.?y|qo.?shiq|music|song|play|tingla|yoq)\b",
+    "music": r"\b(musiqa\w*|qo.?y\w*|qo.?shiq\w*|music\w*|song\w*|play\w*|tingla\w*|yoq\w*)\b",
     "workflow": (
         r"\b(workflow|flow|automation|template|n8n|telegram|slack|"
         r"google sheets|sheet|webhook|valyuta|oltin|currency)\b"
@@ -40,12 +45,23 @@ INTENT_PATTERNS: dict[str, str] = {
     "notes": r"\b(yozib ol|esla|eslatma|note|saqla|yodda)\b",
     "timer": r"\b(timer|daqiqa|soniya|minut|sekund|vaqt o.lcha)\b",
     "calculator": r"\b(hisobla|calculate|necha bo.ladi)\b",
-    "clipboard": r"\b(clipboard|buffer|nusxa)\b",
-    "screenshot": r"\b(skrin|screen|rasm ola)\b",
-    "filemanager": r"\b(fayl|folder|papka|katalog|file|directory)\b",
+    "clipboard": r"\b(clipboard\w*|buffer\w*|nusxa\w*)\b",
+    "screenshot": r"\b(skrin\w*|screen\w*|rasm ola\w*|skrinshot)\b",
+    "filemanager": r"\b(fayl\w*|folder\w*|papka\w*|katalog\w*|file\w*|directory)\b",
     "network": r"\b(ip|dns|ping|network|tarmoq)\b",
     "wiki": r"\b(eslab qol|uni esla|esimda saqla|bil|ismim|yoshim|manzil)\b",
     "search": (r"\b(qidir|top|izla|search|find|" r"sabab|define|meaning|nima degan|" r"ma.lumot|tushuntir|izohla)"),
+    "volume": (r"\b(ovoz\w*|tovush\w*|volume\w*|mute\w*|unmute\w*|jim)\b"),
+    "brightness": (r"\b(yorqin\w*|xira\w*|xiralik|brightness\w*|ekranni yorug)\b"),
+    "media": (
+        r"\b(pauza\w*|pause\w*|to'?xtat\w*|keyingi\w+|oldingi\w+|"
+        r"previous\w*|davom ettir|trek\w*|\.mp3|\.mp4|\.mkv|\.wav|\.flac)"
+    ),
+    "input": (
+        r"\b(sichqoncha\w*|mouse\w*|kursor\w*|cursor\w*|klaviatura\w*|"
+        r"keyboard\w*|tugma\w*|enter\b|entir\b|escape\b|esc\b|"
+        r"strelka\w*|ctrl\+\w+)\b"
+    ),
     "chat": r".*",
 }
 

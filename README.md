@@ -196,16 +196,16 @@ zari/
 
 ---
 
-### Milestone 6 — System Control Pack 🔜 (keyingi)
+### Milestone 6 — System Control Pack ✅
 **Muddat: 1-2 kun**
 
 **Maqsad:** Zari kompyuterni ovoz bilan boshqaradi.
 
-- [ ] Volume boshqarish (`pactl`) — "Zari, ovozni 50 ga qo'y"
-- [ ] Ilovalarni ochish/yopish (`subprocess`/`pkill`)
-- [ ] Monitor yorqinligi (`brightnessctl`)
-- [ ] Klaviatura/sichqoncha (PyAutoGUI) — faqat tasdiqlash bilan
-- [ ] Lokal musiqa/video (mpv)
+- [x] Volume boshqarish (`amixer`) — "ovozni 50 ga qo'y", mute, holat
+- [x] Ilovalarni ochish/yopish (`xdg-open`, `pkill -x`, confirmation bilan)
+- [x] Monitor yorqinligi (`xrandr`, 20–100% xavfsiz diapazon)
+- [x] Klaviatura/sichqoncha (`xdotool`) — allowlist + tasdiqlash majburiy
+- [x] Lokal musiqa/video (`mpv`) + transport (`playerctl`): pauza/next/prev
 
 ---
 
