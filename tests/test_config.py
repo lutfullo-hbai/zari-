@@ -13,10 +13,10 @@ class TestSettings:
         assert s.ollama_model == "qwen2.5:3b"
         assert s.groq_model == "llama-3.3-70b-versatile"
         assert s.groq_api_key == ""
-        assert s.llm_provider == "groq"
+        assert s.llm_provider == "ollama"
         assert s.wake_word == "jarvis"
         assert s.tts_voice == "uz-UZ-MadinaNeural"
-        assert s.enable_translation == True
+        assert s.enable_translation == False
         assert s.whisper_language == "uz"
         assert s.log_level == "INFO"
 

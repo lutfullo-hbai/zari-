@@ -2,16 +2,16 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Ollama (kelajakda qaytish uchun saqlandi)
+    # Ollama — local-first asosiy provayder
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
 
-    # Groq API (vaqtincha — kompyuter imkoniyati kichkinaligi uchun)
+    # Groq API — tez cloud fallback
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
 
-    # LLM provayderni tanlash: "groq" | "ollama"
-    llm_provider: str = "groq"
+    # LLM provayderni tanlash: "ollama" | "groq"
+    llm_provider: str = "ollama"
 
     # Agent Brain — ko'p intentli murakkab so'rovlarda LLM reja tuzadi
     enable_brain: bool = True
@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     sender_address: str = ""
     default_recipient: str = ""
 
-    enable_translation: bool = True
+    # UZ<->EN tarjima — zamonaviy modellar o'zbekchani biladi, odatda kerakmas
+    # (har bir xabarga 2 ta ortiqcha LLM chaqiruv qiladi)
+    enable_translation: bool = False
     whisper_language: str = "uz"
     audio_input_device: int | None = None
     audio_output_device: int | None = None
@@ -61,7 +63,11 @@ class Settings(BaseSettings):
 
     web_host: str = "0.0.0.0"
     web_port: int = 8080
-    web_cors_origins: list[str] = ["*"]
+    # Dashboard same-origin ishlaydi; tashqi klientlar uchun aniq origin ko'rsatilsin
+    web_cors_origins: list[str] = [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ]
     # Bo'sh bo'lsa auth o'chirilgan (local dev). LAN/server uchun majburiy qiling.
     web_api_key: str = ""
 

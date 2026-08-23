@@ -1,8 +1,8 @@
 """
 LLM client factory — settings.llm_provider asosida provayderni tanlaydi.
 
-"groq"   -> GroqClient (cloud API, vaqtincha)
-"ollama" -> OllamaClient (lokal)
+"ollama" -> OllamaClient (local, asosiy)
+"groq"   -> GroqClient (cloud fallback, tez)
 """
 
 import logging
@@ -14,8 +14,8 @@ from llm.ollama import OllamaClient
 
 log = logging.getLogger("zari")
 
-VALID_PROVIDERS = ("groq", "ollama")
-DEFAULT_PROVIDER = "groq"
+VALID_PROVIDERS = ("ollama", "groq")
+DEFAULT_PROVIDER = "ollama"
 
 
 class LLMClient(Protocol):
@@ -46,6 +46,6 @@ def create_llm_client(provider: str | None = None) -> LLMClient:
         )
         selected = DEFAULT_PROVIDER
 
-    if selected == "ollama":
-        return OllamaClient()
-    return GroqClient()
+    if selected == "groq":
+        return GroqClient()
+    return OllamaClient()

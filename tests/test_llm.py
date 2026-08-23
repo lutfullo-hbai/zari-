@@ -213,13 +213,13 @@ class TestLLMFactory:
             mock_cls.assert_called_once_with()
             assert client is mock_cls.return_value
 
-    def test_unknown_provider_falls_back_to_groq(self):
+    def test_unknown_provider_falls_back_to_ollama(self):
         with patch('llm.factory.GroqClient') as mock_groq, \
                 patch('llm.factory.OllamaClient') as mock_ollama:
             client = create_llm_client("unknown")
-            mock_groq.assert_called_once_with()
-            mock_ollama.assert_not_called()
-            assert client is mock_groq.return_value
+            mock_groq.assert_not_called()
+            mock_ollama.assert_called_once_with()
+            assert client is mock_ollama.return_value
 
     def test_case_insensitive_provider(self):
         with patch('llm.factory.OllamaClient') as mock_cls:
