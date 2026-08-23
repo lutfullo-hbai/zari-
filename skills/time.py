@@ -42,10 +42,10 @@ class TimeSkill(BaseSkill):
         asks_time = any(w in text for w in ["soat", "vaqt", "time", "necha"])
 
         if asks_date and not asks_time:
-            response = f"Bugun {now.day}-{MONTHS_UZ[now.month]} {now.year}-yil, " f"{WEEKDAYS_UZ[now.weekday()]}."
+            response = f"Bugun {now.day}-{MONTHS_UZ[now.month]} {now.year}-yil, {WEEKDAYS_UZ[now.weekday()]}."
             context = f"date:{now.date().isoformat()}"
         else:
-            response = f"Hozir soat {now.strftime('%H:%M')}, " f"{WEEKDAYS_UZ[now.weekday()]}."
+            response = f"Hozir soat {now.strftime('%H:%M')}, {WEEKDAYS_UZ[now.weekday()]}."
             context = f"time:{now.strftime('%H:%M')}"
 
         return {"response": response, "context": context, "source": "time"}

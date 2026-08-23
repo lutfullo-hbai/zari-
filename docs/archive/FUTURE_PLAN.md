@@ -126,7 +126,7 @@ Proactive:
   👤 "Zari, ertaga meeting bor"
   🤖 "Soat nechada? Qayerda? Kim bilan?"
       ↓
-  🤖 "Ertaga 11:00 da Zoom meeting. 
+  🤖 "Ertaga 11:00 da Zoom meeting.
       10:00 da eslataman. Agenda tayyorlab qo'yaymi?"
   ✅ (oldindan o'ylaydi)
 ```

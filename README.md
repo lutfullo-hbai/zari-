@@ -24,7 +24,7 @@ Zari — ovoz bilan boshqariladigan, kompyutеr ichida yashaydigan, foydalanuvch
 - 🌐 Browser agent (browser-use), 🖥️ system control pack, 📄 hujjatlar (PDF/Word/Excel),
   👁️ vision, 🎙️ XTTS ovoz kloni, 🧠 semantik vector xotira, 📅 Google Calendar, 🏠 Smart Home
 
-Batafsil tahlil: `REVIEW.md`, `FIXES.md`, `MIGRATION.md`
+Batafsil tahlillar: `docs/archive/` (REVIEW, FIXES, MIGRATION va boshqalar)
 
 ---
 
@@ -376,7 +376,7 @@ SENDER_ADDRESS=from@example.com
 DEFAULT_RECIPIENT=to@example.com
 ```
 
-For Gmail API / OAuth flow (recommended for production using Gmail), see the `EMAIL` task in `FUTURE_PLAN.md` for steps.
+For Gmail API / OAuth flow (recommended for production using Gmail), see the `EMAIL` task in `docs/archive/FUTURE_PLAN.md` for steps.
 
 ### Perplexica bilan qidiruv
 

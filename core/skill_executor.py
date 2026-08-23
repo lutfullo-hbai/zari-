@@ -95,7 +95,7 @@ class SkillExecutor:
         if getattr(skill, "requires_confirmation", False):
             if not rate_limiter.is_allowed(skill_name):
                 await self._respond(
-                    f"Kechirasiz, {skill_name} juda tez-tez ishlatilyapti. " "Biroz kuting va qayta urinib ko'ring.",
+                    f"Kechirasiz, {skill_name} juda tez-tez ishlatilyapti. Biroz kuting va qayta urinib ko'ring.",
                     request_id,
                 )
                 return None, True

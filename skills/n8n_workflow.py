@@ -55,7 +55,7 @@ class N8nWorkflowSkill(BaseSkill):
         if stats is None:
             return {
                 "response": (
-                    "n8n workflow templates server ishlamayapti. " "Serverni ishga tushiring: python api_server.py"
+                    "n8n workflow templates server ishlamayapti. Serverni ishga tushiring: python api_server.py"
                 ),
                 "context": "",
                 "source": "n8n_workflow",
