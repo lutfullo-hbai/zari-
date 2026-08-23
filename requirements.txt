@@ -26,5 +26,6 @@ pypdf>=4.0
 python-docx>=1.1
 openpyxl>=3.1
 playwright>=1.40
-# pkg_resources uchun (ba'zi paketlar import qiladi)
-setuptools>=69
+# pkg_resources uchun (webrtcvad va boshqalar import qiladi).
+# 81+ da deprecate, keyingi versiyalarda OLIB TASHLANGAN — shuning uchun pin.
+setuptools>=69,<81
