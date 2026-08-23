@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -99,34 +99,32 @@ class TestCache:
 
 class TestDatabase:
     @pytest.mark.asyncio
-    async def test_init_db_creates_tables(self):
+    async def test_init_db_delegates_to_alembic(self):
+        """init_db endi alembic upgrade head ni chaqiradi (bitta schema manba)."""
         import db.database
+
         db.database._pool = None
 
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock(return_value="")
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-
-        mock_pool = MagicMock()
-        mock_pool.acquire.return_value = mock_ctx
-
-        with patch.object(db.database, "get_pool", return_value=mock_pool):
+        with patch("alembic.command.upgrade") as mock_upgrade, patch(
+            "alembic.config.Config"
+        ) as mock_config_cls:
             await db.database.init_db()
 
-            exec_calls = mock_conn.execute.call_args_list
-            assert len(exec_calls) >= 5
+            mock_upgrade.assert_called_once_with(
+                mock_config_cls.return_value, "head"
+            )
 
         db.database._pool = None
 
     @pytest.mark.asyncio
     async def test_get_pool_returns_same_instance(self):
+        import asyncpg
+
         import db.database
         db.database._pool = None
 
         mock_pool = AsyncMock()
-        with patch("db.database.asyncpg.create_pool", new_callable=AsyncMock, return_value=mock_pool):
+        with patch.object(asyncpg, "create_pool", new_callable=AsyncMock, return_value=mock_pool):
             pool1 = await db.database.get_pool()
             pool2 = await db.database.get_pool()
 

@@ -1,17 +1,17 @@
 import logging
 
-import asyncpg
-
 from core.config import settings
 
 log = logging.getLogger("zari")
 
-_pool: asyncpg.Pool | None = None
+_pool = None
 
 
-async def get_pool() -> asyncpg.Pool:
+async def get_pool():
     global _pool
     if _pool is None:
+        import asyncpg
+
         _pool = await asyncpg.create_pool(
             settings.database_url,
             min_size=2,
@@ -22,58 +22,27 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def init_db():
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                created_at TIMESTAMPTZ DEFAULT now()
-            )
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id SERIAL PRIMARY KEY,
-                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT now()
-            )
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_messages_session
-            ON messages(session_id, created_at)
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS persona (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                category TEXT NOT NULL DEFAULT 'general',
-                confidence REAL DEFAULT 1.0,
-                source TEXT DEFAULT 'manual',
-                updated_at TIMESTAMPTZ DEFAULT now()
-            )
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS notes (
-                id SERIAL PRIMARY KEY,
-                title TEXT DEFAULT '',
-                content TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT now(),
-                tags TEXT DEFAULT ''
-            )
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_notes_content ON notes(content)
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS wiki (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT now(),
-                updated_at TIMESTAMPTZ DEFAULT now()
-            )
-        """)
-    log.info("Database initialized")
+    """
+    Schema yaratish — bitta manba: alembic migratsiyalari.
+
+    init_db() endi to'g'ridan-to'g'ri CREATE TABLE yozmaydi,
+    `alembic upgrade head` ni ishga tushiradi. Shu bilan alembic
+    va runtime schema o'rtasidagi drift oldini olinadi.
+    """
+    import asyncio
+    from pathlib import Path
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
+    alembic_cfg = Config(str(ini_path))
+    alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
+
+    # Alembic sinxron API — thread'da ishga tushiramiz
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+    log.info("Database migrations applied (alembic upgrade head)")
 
 
 async def close_db():

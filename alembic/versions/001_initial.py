@@ -1,18 +1,21 @@
 """initial schema — sessions, messages, persona, notes, wiki
 
+Idempotent: IF NOT EXISTS — mavjud DB (init_db() davrida yaratilgan)
+ham, bo'sh DB ham xatosiz upgrade qilinadi.
+
 Revision ID: 001_initial
 Revises:
 Create Date: 2025-01-01 00:00:00.000000
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "001_initial"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -32,7 +35,9 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ DEFAULT now()
         )
     """)
-    op.create_index("idx_messages_session", "messages", ["session_id", "created_at"])
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages (session_id, created_at)"
+    )
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS persona (
@@ -54,7 +59,7 @@ def upgrade() -> None:
             tags TEXT DEFAULT ''
         )
     """)
-    op.create_index("idx_notes_content", "notes", ["content"])
+    op.execute("CREATE INDEX IF NOT EXISTS idx_notes_content ON notes (content)")
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS wiki (
@@ -67,10 +72,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("wiki")
-    op.drop_index("idx_notes_content", "notes")
-    op.drop_table("notes")
-    op.drop_table("persona")
-    op.drop_index("idx_messages_session", "messages")
-    op.drop_table("messages")
-    op.drop_table("sessions")
+    op.execute("DROP INDEX IF EXISTS idx_notes_content")
+    op.execute("DROP TABLE IF EXISTS wiki")
+    op.execute("DROP TABLE IF EXISTS notes")
+    op.execute("DROP TABLE IF EXISTS persona")
+    op.execute("DROP INDEX IF EXISTS idx_messages_session")
+    op.execute("DROP TABLE IF EXISTS messages")
+    op.execute("DROP TABLE IF EXISTS sessions")

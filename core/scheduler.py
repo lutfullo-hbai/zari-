@@ -28,26 +28,6 @@ class ScheduledTask:
     next_run: datetime | None = None
 
 
-async def init_scheduler_table() -> None:
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                message TEXT NOT NULL,
-                schedule_type TEXT NOT NULL DEFAULT 'once',
-                schedule_value TEXT NOT NULL DEFAULT '',
-                is_active BOOLEAN NOT NULL DEFAULT true,
-                last_run TIMESTAMPTZ,
-                next_run TIMESTAMPTZ,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-            """
-        )
-
-
 async def add_task(
     name: str,
     message: str,

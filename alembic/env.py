@@ -1,33 +1,30 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from core.config import settings
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+
+# App darajasidagi URL asyncpg uchun oddiy (postgresql://),
+# SQLAlchemy esa dialekt nomini talab qiladi (postgresql+asyncpg://)
+_db_url = settings.database_url
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+config.set_main_option("sqlalchemy.url", _db_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-from db.database import get_pool as _
-
-
-META_DATA = __import__("sqlalchemy").MetaData()
-
-TABLES = """
-sessions, messages, persona, notes, wiki
-""".strip().split(", ")
 
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
-        target_metadata=META_DATA,
+        target_metadata=None,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -36,7 +33,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=META_DATA)
+    context.configure(connection=connection, target_metadata=None)
     with context.begin_transaction():
         context.run_migrations()
 
