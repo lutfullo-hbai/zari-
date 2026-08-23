@@ -90,12 +90,22 @@ class DocumentSkill(BaseSkill):
 
                 wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
                 lines = []
+                total = 0
+                # Katta jadvallarda xotira portlamasligi uchun erta to'xtaymiz
+                limit = MAX_TEXT_CHARS * 3
                 for ws in wb.worksheets:
                     lines.append(f"[{ws.title}]")
                     for row in ws.iter_rows(values_only=True):
                         vals = ["" if v is None else str(v) for v in row]
                         if any(vals):
-                            lines.append("\t".join(vals))
+                            ln = "\t".join(vals)
+                            lines.append(ln)
+                            total += len(ln) + 1
+                            if total >= limit:
+                                break
+                    if total >= limit:
+                        lines.append("... (jadval davomi bor)")
+                        break
                 wb.close()
                 return "\n".join(lines)
             if ext == ".xls":

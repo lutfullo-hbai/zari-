@@ -259,3 +259,25 @@ class TestM7Routing:
 
         for name in ("organize", "documents", "code_runner"):
             assert name in AVAILABLE_SKILLS
+
+
+class TestDocumentSkillLargeFiles:
+    @pytest.mark.asyncio
+    async def test_xlsx_memory_guard(self, tmp_path):
+        from skills.documents import DocumentSkill
+
+        skill = DocumentSkill()
+        """Katta jadvalda iteratsiya erta to'xtashi kerak (xotira himoyasi)."""
+        import openpyxl
+
+        f = tmp_path / "katta.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Data"
+        for i in range(5000):
+            ws.append([f"qator_{i}", "uzun qiymat" * 20])
+        wb.save(str(f))
+
+        result = await skill.execute(f"{f} ni o'qi")
+        assert result is not None
+        assert len(result["context"]) <= 20000 * 2 + 1000
