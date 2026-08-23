@@ -1,5 +1,7 @@
 # Environment
 .env
+.env.docker
+.env.*.local
 .venv/
 venv/
 env/

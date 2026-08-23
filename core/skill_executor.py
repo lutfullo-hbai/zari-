@@ -146,13 +146,33 @@ class SkillExecutor:
             # Brain action ham, javob ham bermadi — regex yo'lga qaytamiz
             return await self.match_and_execute(text, request_id)
 
-        # Brain zanjiri — har bir action ketma-ket bajariladi
-        responses: list[str] = []
+        # Xavfsizlik devori: Brain LLM'i xavfli skill'ni avtomatik bajara olmaydi.
+        # requires_confirmation bo'lgan skill faqat dialog tasdig'idan keyin ishlaydi.
         for action in decision.actions:
             skill = self.get_skill(action.skill)
             if skill is None:
                 log.warning("Brain nomalum skill buyurdi: %s", action.skill)
                 continue
+            if getattr(skill, "requires_confirmation", False):
+                query = str(action.params.get("query", text))
+                question = self._dialog.begin_confirm(action.skill, query, skill)
+                await self._respond(
+                    f"Xavfli amal aniqlandi. Tasdiqlaysizmi?\n{question}",
+                    request_id,
+                )
+                return None, True
+
+        # Brain zanjiri — faqat xavfsiz skill'lar ketma-ket bajariladi
+        responses: list[str] = []
+        for action in decision.actions:
+            skill = self.get_skill(action.skill)
+            if skill is None:
+                continue
+            if not rate_limiter.is_allowed(skill.__class__.__name__):
+                log.warning("Rate limit: %s o'tkazib yuborildi", action.skill)
+                continue
+            # Param sanitizatsiya: LLM params faqat o'qish/safe skill'larga.
+            # Xavfli yo'nalishdagi hech narsa Brain tomonidan shakllantirilmaydi.
             query = str(action.params.get("query", text))
             result = await skill.execute_with_retry(query)
             if result and result.get("response"):

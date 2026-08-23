@@ -261,6 +261,44 @@ class TestFileManagerSkill:
         assert "demo.txt" in result["response"]
         assert "hello world" in result["response"]
 
+    @pytest.mark.asyncio
+    async def test_delete_uses_recycle_bin_not_unlink(self, tmp_path):
+        """O'chirish qaytarib bo'lmaydigan unlink emas — send2trash (savat)."""
+        from unittest.mock import patch as mock_patch
+
+        from skills.filemanager import FileManagerSkill
+
+        file_path = tmp_path / "muhim.txt"
+        file_path.write_text("data", encoding="utf-8")
+
+        skill = FileManagerSkill()
+        with mock_patch("skills.filemanager.send2trash") as mock_trash:
+            result = await skill.execute(f"faylni o'chir {file_path}")
+
+        mock_trash.assert_called_once_with(str(file_path))
+        assert result is not None
+        assert "savatga" in result["response"]
+        # Fayl o'z joyida qoladi (send2trash mocklangan)
+        assert file_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_failure_never_permanently_removes(self, tmp_path):
+        """Savatga ko'chirish amalga oshmasa — fayl o'zgarmagan holatda qoladi."""
+        from unittest.mock import patch as mock_patch
+
+        from skills.filemanager import FileManagerSkill
+
+        file_path = tmp_path / "qimmatli.docx"
+        file_path.write_bytes(b"\xd0\xcf\x11\xe0")
+
+        skill = FileManagerSkill()
+        with mock_patch("skills.filemanager.send2trash", side_effect=RuntimeError("no trash")):
+            result = await skill.execute(f"ochirib yubor {file_path}")
+
+        assert result is not None
+        assert "bo'lmadi" in result["response"]
+        assert file_path.exists()
+
 
 class TestNetworkSkill:
     @pytest.mark.asyncio

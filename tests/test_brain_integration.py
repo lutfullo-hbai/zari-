@@ -155,3 +155,73 @@ async def test_brain_direct_response_sent_via_respond():
     assert responded is True
     assert response == "Ikki xil so'rov, bittasini tanlang"
     respond.assert_awaited_once_with("Ikki xil so'rov, bittasini tanlang", "req-7")
+
+
+@pytest.mark.asyncio
+async def test_dangerous_brain_action_asks_confirmation():
+    """
+    REGRESSIYA: Brain email/fayl-o'chirish kabi xavfli skill'ni
+    avtomatik bajara olmaydi — tasdiqlash savoli beriladi.
+    """
+    brain = MagicMock()
+    brain.decide = AsyncMock(return_value=Decision(actions=[Action(skill="email", params={"query": "salom de"})]))
+    respond = AsyncMock()
+    dialog = MagicMock()
+    dialog.begin_confirm.return_value = "Akbar akaga yuborilsinmi?"
+
+    class DangerousSkill:
+        requires_confirmation = True
+        execute_with_retry = AsyncMock()
+
+    executor = SkillExecutor(
+        skills={"email": DangerousSkill()},
+        memory=MagicMock(),
+        dialog=dialog,
+        brain=brain,
+        respond=respond,
+    )
+
+    # "email" + "ob-havo" — 2 intent, brain yo'li
+    response, responded = await executor.route_and_execute("akbarga email yubor va ob-havo ayt", "req-s1")
+
+    assert responded is True
+    assert response is None
+    skill = executor._skills["email"]
+    skill.execute_with_retry.assert_not_awaited()
+    dialog.begin_confirm.assert_called_once_with("email", "salom de", skill)
+    assert "Xavfli amal aniqlandi" in respond.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_brain_rate_limit_skips_action():
+    """Rate limit tushgan skill zanjir bajarilishidan chiqarib yuboriladi."""
+    from core.rate_limiter import rate_limiter
+
+    brain = MagicMock()
+    brain.decide = AsyncMock(return_value=Decision(actions=[Action(skill="wiki")]))
+    skill = FakeSkill("javob")
+    executor = make_executor(brain=brain, skills={"wiki": skill})
+
+    with __import__("unittest").mock.patch.object(rate_limiter, "is_allowed", return_value=False):
+        response, responded = await executor.route_and_execute("musiqa qo'y va ob-havo ayt", "req-rl")
+
+    assert responded is False
+    assert response is None
+    skill.execute_with_retry.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_safe_chain_unaffected_by_safety_wall():
+    """Xavfsiz skill'lar (search/wiki) avvalgidek erkin bajariladi."""
+    brain = MagicMock()
+    brain.decide = AsyncMock(return_value=Decision(actions=[Action(skill="search"), Action(skill="wiki")]))
+    search_skill = FakeSkill("natija")
+    wiki_skill = FakeSkill("fakt")
+    executor = make_executor(brain=brain, skills={"search": search_skill, "wiki": wiki_skill})
+    for s in (search_skill, wiki_skill):
+        s.requires_confirmation = False
+
+    response, responded = await executor.route_and_execute("qidiruv qil va eslab qol", "req-safe")
+
+    assert responded is True
+    assert "natija" in response and "fakt" in response

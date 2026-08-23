@@ -21,5 +21,6 @@ redis>=5.0
 mss>=9.0
 Pillow>=10.0
 pyperclip>=1.8
+Send2Trash>=1.8
 fastapi>=0.115
 uvicorn>=0.30

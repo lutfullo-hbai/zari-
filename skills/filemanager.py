@@ -4,6 +4,8 @@ import re
 import shutil
 from pathlib import Path
 
+from send2trash import send2trash
+
 from skills.base import BaseSkill
 
 log = logging.getLogger("zari")
@@ -26,11 +28,13 @@ class FileManagerSkill(BaseSkill):
         if any(w in text for w in ["list", "ko'rsat", "nima bor", "show", "ls"]):
             return await self._list_files(text)
 
-        if any(w in text for w in ["och", "open", "cat", "o'qi", "read"]):
-            return await self._read_file(text)
-
+        # MUHIM: "o'chir" "och" so'zini o'z ichiga olgani uchun
+        # o'chirish tekshiruvi o'qishdan OLDIN turishi shart.
         if any(w in text for w in ["ochir", "o'chir", "delete", "rm"]):
             return await self._delete_file(text)
+
+        if any(w in text for w in ["och", "open", "cat", "o'qi", "read"]):
+            return await self._read_file(text)
 
         if any(w in text for w in ["ko'chir", "move", "nomini o'zgartir", "rename", "copy", "nusxa"]):
             return await self._move_file(text)
@@ -99,14 +103,21 @@ class FileManagerSkill(BaseSkill):
             return {"response": f"Topilmadi: {path}", "context": "", "source": "filemanager"}
 
         try:
-            if p.is_file():
-                p.unlink()
-                return {"response": f"Fayl o'chirildi: {p.name}", "context": "", "source": "filemanager"}
-            shutil.rmtree(p)
-            return {"response": f"Katalog o'chirildi: {p.name}", "context": "", "source": "filemanager"}
+            # Qaytarib bo'lmaydigan o'chirish TAQIQLANGAN — har doim savatga.
+            send2trash(str(p))
+            kind = "Fayl" if p.is_file() else "Katalog"
+            return {
+                "response": f"{kind} savatga ko'chirildi (tiklash mumkin): {p.name}",
+                "context": "",
+                "source": "filemanager",
+            }
         except Exception as e:
             log.warning("Delete xatosi: %s", e)
-            return {"response": f"O'chirishda xatolik: {path}", "context": "", "source": "filemanager"}
+            return {
+                "response": f"O'chirib bo'lmadi (savatga ko'chirish amalga oshmadi): {path}",
+                "context": "",
+                "source": "filemanager",
+            }
 
     async def _move_file(self, text: str) -> dict | None:
         parts = (
