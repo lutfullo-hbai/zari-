@@ -22,6 +22,7 @@ AVAILABLE_SKILLS = [
     "brightness",
     "input",
     "media",
+    "browser",
     "organize",
     "documents",
     "code_runner",

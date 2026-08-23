@@ -219,14 +219,15 @@ zari/
 
 ---
 
-### Milestone 8 — Browser Agent 🔜
+### Milestone 8 — Browser Agent 🟡 (yadro tayyor)
 **Muddat: 1 hafta**
 
-- [ ] browser-use + Playwright integratsiya (skill sifatida)
+- [x] Playwright integratsiya (skill sifatida) — sayt ochish, matn o'qish,
+      YouTube/Google qidiruv; brauzer instansiya qayta ishlatiladi
 - [ ] Google Sheets/Docs/Gmail browser orqali
-- [ ] YouTube to'liq boshqaruv (qidirish, qo'yish, to'xtatish)
+- [ ] YouTube to'liq boshqaruv (qidirish ✓, ijro boshqaruvi qolmoqda)
 - [ ] Form to'ldirish, ma'lumot olish, ticket bron
-- ⚠️ Pul ketadigan harakatlarda ikki bosqichli tasdiq majburiy
+- ✅ Pul ketadigan harakatlarga zamin: skill darajasida tasdiq MAJBURIY
 
 ---
 

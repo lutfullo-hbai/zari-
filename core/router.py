@@ -15,6 +15,7 @@ INTENT_PRIORITY: dict[str, int] = {
     "screenshot": 80,
     "filemanager": 80,
     "organize": 82,
+    "browser": 75,
     "documents": 70,
     "weather": 70,
     "timer": 65,
@@ -38,6 +39,11 @@ INTENT_PATTERNS: dict[str, str] = {
     "system_info": (
         r"\b(kompyuter\w*|tizim\w*|system\w*|protsessor\w*|CPU|cpu|ram\w*|"
         r"xotira\w*|disk\w*|uptime|python\w*|versiya\w*|holat\w*|ma'lumot)\b"
+    ),
+    "browser": (
+        r"\b(youtube\w*|google\w*|sayt\w*|veb sayt|website\w*|brauzer\w*|"
+        r"browser\w*|havola\w*|instagram\w*|facebook\w*|twitter\b|github\b|"
+        r"https?://\S+)\b"
     ),
     "organize": r"\b(tartibga sol\w*|tartibla|sarala\w*|organize)\b",
     "documents": r"\b(pdf\w*|docx?\b|hujjat\w*|excel\w*|xlsx?\b|jadval fayl|powerpoint|pptx?)\b",
