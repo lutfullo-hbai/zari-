@@ -246,3 +246,45 @@ class TestM6Routing:
 
         for name in ("volume", "brightness", "input", "media"):
             assert name in AVAILABLE_SKILLS
+
+
+class TestBrightnessRealWorld:
+    @pytest.mark.asyncio
+    async def test_zero_report_treated_as_unreadable(self):
+        """REGRESSIYA: ba'zi drayverlar yoniq ekranda Brightness: 0.0 reportlaydi —
+        bunday qiymat neytral 1.0 baza sifatida olinadi."""
+        from skills.brightness import BrightnessSkill
+
+        fake_verbose = (
+            "Screen 0: minimum 8 x 8, current 3840 x 1080\n"
+            "HDMI-1 connected primary 1920x1080+0+0 (0x43) normal\n"
+            "\tBrightness: 0.0\n"
+            "eDP-1 connected 1920x1080+1920+0 (0x5f) normal\n"
+            "\tBrightness: 1.0\n"
+        )
+        skill = BrightnessSkill()
+        with patch("skills.brightness.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = fake_verbose
+            cur = await skill._get_current()
+
+        assert cur == 1.0
+
+    @pytest.mark.asyncio
+    async def test_reads_own_monitor_section_not_first_found(self):
+        """HDMI-1 primary tanlanadi va O'Z Brightness'i o'qiladi."""
+        from skills.brightness import BrightnessSkill
+
+        fake_verbose = (
+            "HDMI-1 connected primary (0x43)\n\tBrightness: 0.85\neDP-1 connected (0x5f)\n\tBrightness: 1.0\n"
+        )
+        skill = BrightnessSkill()
+        skill._output = None
+        with patch("skills.brightness.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = fake_verbose
+            out = await skill._get_output()
+            cur = await skill._get_current()
+
+        assert out == "HDMI-1"
+        assert cur == 0.85

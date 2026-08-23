@@ -71,12 +71,29 @@ class BrightnessSkill(BaseSkill):
         return self._output
 
     async def _get_current(self) -> float:
+        """Tanlangan monitorning O'Z bo'limidan Brightness ni o'qiydi —
+        birinchi uchragan qiymat boshqa monitorniki bo'lishi mumkin."""
         output = await self._get_output()
         if not output:
             return 1.0
         proc = subprocess.run(["xrandr", "--verbose"], capture_output=True, text=True, timeout=5)
-        m = re.search(r"Brightness:\s*(\d\.\d+)", proc.stdout)
-        return float(m.group(1)) if m else 1.0
+        lines = proc.stdout.splitlines()
+        start = next(
+            (i for i, ln in enumerate(lines) if ln.startswith(f"{output} connected")),
+            None,
+        )
+        if start is None:
+            return 1.0
+        for ln in lines[start : start + 60]:
+            m = re.search(r"Brightness:\s*(\d\.\d+)", ln)
+            if m:
+                val = float(m.group(1))
+                # Ayrim drayverlar ishlaydigan ekranda ham 0.0 reportlaydi.
+                # Bunday "o'qilmagan" qiymatda neytral baza — xavfsizlik uchun.
+                if val < 0.05:
+                    return 1.0
+                return val
+        return 1.0
 
     async def _apply(self, value: float) -> dict:
         output = await self._get_output()
