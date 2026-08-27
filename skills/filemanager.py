@@ -1,7 +1,10 @@
 import logging
 import os
+import re
 import shutil
 from pathlib import Path
+
+from send2trash import send2trash
 
 from skills.base import BaseSkill
 
@@ -25,11 +28,13 @@ class FileManagerSkill(BaseSkill):
         if any(w in text for w in ["list", "ko'rsat", "nima bor", "show", "ls"]):
             return await self._list_files(text)
 
-        if any(w in text for w in ["och", "open", "cat", "o'qi", "read"]):
-            return await self._read_file(text)
-
+        # MUHIM: "o'chir" "och" so'zini o'z ichiga olgani uchun
+        # o'chirish tekshiruvi o'qishdan OLDIN turishi shart.
         if any(w in text for w in ["ochir", "o'chir", "delete", "rm"]):
             return await self._delete_file(text)
+
+        if any(w in text for w in ["och", "open", "cat", "o'qi", "read"]):
+            return await self._read_file(text)
 
         if any(w in text for w in ["ko'chir", "move", "nomini o'zgartir", "rename", "copy", "nusxa"]):
             return await self._move_file(text)
@@ -98,17 +103,32 @@ class FileManagerSkill(BaseSkill):
             return {"response": f"Topilmadi: {path}", "context": "", "source": "filemanager"}
 
         try:
-            if p.is_file():
-                p.unlink()
-                return {"response": f"Fayl o'chirildi: {p.name}", "context": "", "source": "filemanager"}
-            shutil.rmtree(p)
-            return {"response": f"Katalog o'chirildi: {p.name}", "context": "", "source": "filemanager"}
+            # Qaytarib bo'lmaydigan o'chirish TAQIQLANGAN — har doim savatga.
+            send2trash(str(p))
+            kind = "Fayl" if p.is_file() else "Katalog"
+            return {
+                "response": f"{kind} savatga ko'chirildi (tiklash mumkin): {p.name}",
+                "context": "",
+                "source": "filemanager",
+            }
         except Exception as e:
             log.warning("Delete xatosi: %s", e)
-            return {"response": f"O'chirishda xatolik: {path}", "context": "", "source": "filemanager"}
+            return {
+                "response": f"O'chirib bo'lmadi (savatga ko'chirish amalga oshmadi): {path}",
+                "context": "",
+                "source": "filemanager",
+            }
 
     async def _move_file(self, text: str) -> dict | None:
-        parts = text.replace("ko'chir", "").replace("nomini o'zgartir", "").replace("rename", "").replace("move", "").replace("copy", "").replace("nusxa", "").split()
+        parts = (
+            text.replace("ko'chir", "")
+            .replace("nomini o'zgartir", "")
+            .replace("rename", "")
+            .replace("move", "")
+            .replace("copy", "")
+            .replace("nusxa", "")
+            .split()
+        )
         if len(parts) < 2:
             return None
         src = self._resolve_path(parts[0])
@@ -126,7 +146,54 @@ class FileManagerSkill(BaseSkill):
             return {"response": "Ko'chirishda xatolik.", "context": "", "source": "filemanager"}
 
     def _extract_path(self, text: str) -> str | None:
-        for kw in ["och", "open", "cat", "o'qi", "read", "ochir", "o'chir", "delete", "rm", "ko'chir", "move", "nomini o'zgartir", "rename", "copy", "nusxa", "list", "ko'rsat", "ls"]:
-            text = text.replace(kw, "").strip()
-        text = text.strip().strip(".,!?").strip()
-        return text if text else None
+        cleaned = text.strip()
+
+        for kw in [
+            "och",
+            "open",
+            "cat",
+            "o'qi",
+            "read",
+            "ochir",
+            "o'chir",
+            "delete",
+            "rm",
+            "ko'chir",
+            "move",
+            "nomini o'zgartir",
+            "rename",
+            "copy",
+            "nusxa",
+            "list",
+            "ko'rsat",
+            "ls",
+            "fayl",
+            "faylni",
+            "papka",
+            "katalog",
+            "yo'li",
+            "manzil",
+        ]:
+            cleaned = re.sub(rf"\b{re.escape(kw)}\b", " ", cleaned, flags=re.IGNORECASE)
+
+        for pattern in [r'"([^"]+)"', r"'([^']+)'"]:
+            match = re.search(pattern, cleaned)
+            if match:
+                return match.group(1).strip()
+
+        tokens = [token for token in re.split(r"\s+", cleaned) if token]
+        for token in reversed(tokens):
+            token = token.strip(".,!?")
+            if not token:
+                continue
+            if token in {".", "..", "~"}:
+                continue
+            if re.match(r"^(~|/|\.{1,2}/|[A-Za-z]:[\\/]).+", token):
+                return token
+            if "/" in token or "\\" in token or token.startswith("."):
+                return token
+            if re.search(r"\.(txt|md|py|json|yaml|yml|csv|log|ini|toml|sql)$", token, re.IGNORECASE):
+                return token
+
+        cleaned = cleaned.strip().strip(".,!?").strip()
+        return cleaned if cleaned else None

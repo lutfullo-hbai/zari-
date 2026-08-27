@@ -1,5 +1,7 @@
 # Environment
 .env
+.env.docker
+.env.*.local
 .venv/
 venv/
 env/
@@ -16,9 +18,12 @@ build/
 *.mp3
 
 # Data
-data/memory.db
+data/*.db
 data/chroma/
 data/profiles/
+
+# Backing services
+Perplexica/
 
 # IDE
 .vscode/

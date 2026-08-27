@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: zari
       POSTGRES_DB: zari
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,30 +15,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  zari:
-    build: .
-    container_name: zari
-    network_mode: host
-    env_file:
-      - .env.docker
-    environment:
-      - PULSE_SERVER=unix:/run/user/1000/pulse/native
-    volumes:
-      - ./data:/app/data
-      - ~/.cache/huggingface:/root/.cache/huggingface
-      - /run/user/1000/pulse:/run/user/1000/pulse
-    devices:
-      - /dev/snd:/dev/snd
-    group_add:
-      - audio
-    stdin_open: true
-    tty: true
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
 
   redis:
     image: redis:7-alpine
@@ -48,6 +24,48 @@ services:
     volumes:
       - redisdata:/data
 
+  zari:
+    build: .
+    container_name: zari-app
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  perplexica:
+    image: itzcrazykns1337/vane:latest
+    container_name: zari-perplexica
+    ports:
+      - "3001:3001"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - PORT=3001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n
+    container_name: zari-n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_SECURE_COOKIE=false
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
   redisdata:
+  n8n_data:

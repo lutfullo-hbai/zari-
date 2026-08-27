@@ -95,6 +95,7 @@ class TestSTT:
     def test_stt_init(self):
         with patch("voice.stt.WhisperModel") as mock_model:
             from voice.stt import SpeechToText
+
             stt = SpeechToText(model_name="tiny")
             mock_model.assert_called_once_with("tiny", compute_type="int8")
             assert stt.language == "uz"
@@ -165,12 +166,14 @@ class TestTTS:
 
     def test_resample_same_rate(self):
         from voice.tts import resample
+
         data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         result = resample(data, 16000, 16000)
         assert np.array_equal(result, data)
 
     def test_resample_different_rate(self):
         from voice.tts import resample
+
         data = np.array([0.0, 1.0, 0.0], dtype=np.float32)
         result = resample(data, 16000, 48000)
         assert len(result) > len(data)
@@ -213,6 +216,7 @@ class TestWakeWordDetector:
             patch("voice.wake.sd.check_input_settings"),
         ):
             from voice.wake import WakeWordDetector
+
             wake = WakeWordDetector()
             audio = np.array([100, 200, -100, -200], dtype=np.int16)
             rms = wake._rms(audio)

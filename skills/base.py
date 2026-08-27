@@ -14,16 +14,13 @@ class BaseSkill(ABC):
     confirmation_type: Literal["danger", "destructive", "info"] | None = None
 
     @abstractmethod
-    async def execute(self, query: str) -> dict | None:
-        ...
+    async def execute(self, query: str) -> dict | None: ...
 
     async def execute_with_retry(self, query: str) -> dict | None:
         for attempt in range(max(self.retries, 0) + 1):
             try:
-                return await asyncio.wait_for(
-                    self.execute(query), timeout=self.timeout
-                )
-            except asyncio.TimeoutError:
+                return await asyncio.wait_for(self.execute(query), timeout=self.timeout)
+            except TimeoutError:
                 log.warning(
                     "%s timed out (attempt %d/%d)",
                     self.__class__.__name__,

@@ -1,35 +1,20 @@
-import asyncio
-import logging
-import sys
-from pathlib import Path
+"""
+n8n Workflow skill — mavjud n8n-workflow-templates API serveri bilan integratsiya.
 
-from core.config import settings
+Foydalanuvchi so'rovlari:
+  - "n8n workflow top" / "n8n workflowlar" — qidiruv
+  - "n8n stats" — statistika
+  - "n8n kategoriyalar" — kategoriyalar
+  - "n8n workflow ishga tushir <nom>" — n8n serverda ishga tushirish
+  - "n8n diagram <filename>" — Mermaid diagram
+"""
+
+import logging
+
+from llm.n8n_templates_client import N8nTemplatesClient
 from skills.base import BaseSkill
 
 log = logging.getLogger("zari")
-
-N8N_PROJECT_DIR = Path(settings.n8n_workflows_dir).resolve() if settings.n8n_workflows_dir else Path("/dev/null")
-
-
-def _import_workflow_db():
-    if N8N_PROJECT_DIR.exists():
-        sys.path.insert(0, str(N8N_PROJECT_DIR))
-    from workflow_db import WorkflowDatabase
-    return WorkflowDatabase
-
-
-def _import_workflow_executor():
-    if N8N_PROJECT_DIR.exists():
-        sys.path.insert(0, str(N8N_PROJECT_DIR))
-    try:
-        from workflow_executor import WorkflowExecutor
-        return WorkflowExecutor
-    except ImportError:
-        try:
-            from executor import run_workflow
-            return run_workflow
-        except ImportError:
-            return None
 
 
 def _match_keywords(text: str, keywords: list[str]) -> bool:
@@ -40,72 +25,13 @@ def _match_keywords(text: str, keywords: list[str]) -> bool:
 class N8nWorkflowSkill(BaseSkill):
     priority = 35
     timeout = 30.0
+    requires_confirmation = True
+    confirmation_type = "danger"
 
     def __init__(self):
-        self._db = None
-        self._executor = None
-        self.db_path = str(N8N_PROJECT_DIR / "database" / "workflows.db")
-        self.workflows_dir = str(N8N_PROJECT_DIR / "workflows")
-
-    @property
-    def db(self):
-        if self._db is None:
-            wdb = _import_workflow_db()
-            self._db = wdb(db_path=self.db_path)
-            self._db.workflows_dir = self.workflows_dir
-        return self._db
-
-    @property
-    def executor(self):
-        if self._executor is None:
-            self._executor = _import_workflow_executor()
-        return self._executor
-
-    def _ensure_indexed(self):
-        import os
-        if not os.path.exists(self.db_path):
-            log.info("N8N workflow bazasi topilmadi, indekslash boshlanmoqda...")
-            stats = self.db.index_all_workflows()
-            log.info("Indekslandi: %d processed, %d skipped, %d errors",
-                     stats["processed"], stats["skipped"], stats["errors"])
-            return stats["processed"] > 0 or stats["skipped"] > 0
-        return True
-
-    def _resolve_workflow_name(self, query: str) -> str | None:
-        try:
-            results, total = self.db.search_workflows(
-                query=query, trigger_filter="all", complexity_filter="all", limit=1, offset=0,
-            )
-            if results:
-                return results[0].get("filename") or results[0].get("name")
-        except Exception:
-            pass
-        return None
+        self._client = N8nTemplatesClient()
 
     async def execute(self, query: str) -> dict | None:
-        if not N8N_PROJECT_DIR.exists():
-            return {
-                "response": "N8N workflow shablonlari topilmadi.",
-                "context": "",
-                "source": "n8n_workflow",
-            }
-
-        try:
-            has_data = await asyncio.to_thread(self._ensure_indexed)
-            if not has_data:
-                return {
-                    "response": "Workflow bazasida hech qanday shablon topilmadi.",
-                    "context": "",
-                    "source": "n8n_workflow",
-                }
-        except Exception as e:
-            log.error("N8N workflow indekslash xatosi: %s", e)
-            return {
-                "response": "Workflow bazasini yuklashda xatolik yuz berdi.",
-                "context": "",
-                "source": "n8n_workflow",
-            }
-
         text = query.lower()
 
         if _match_keywords(text, ["stat", "necha", "qancha", "hisobot"]):
@@ -114,113 +40,161 @@ class N8nWorkflowSkill(BaseSkill):
         if _match_keywords(text, ["kategori", "category", "turlar"]):
             return await self._handle_categories()
 
-        if _match_keywords(text, ["run", "execute", "ishlat", "bajar", "start", "boshl", "trigger"]):
+        if _match_keywords(text, ["run", "execute", "ishlat", "bajar", "start", "boshl", "trigger", "ishga tushir"]):
             return await self._handle_execute(query)
+
+        if _match_keywords(text, ["diagram", "tasvir", "rasm"]):
+            return await self._handle_diagram(query)
+
+        if _match_keywords(text, ["yarat", "create", "qo'sh"]):
+            return await self._handle_create(query)
 
         return await self._handle_search(query)
 
     async def _handle_stats(self) -> dict:
-        try:
-            stats = await asyncio.to_thread(self.db.get_stats)
-            response = (
-                f"Jami {stats['total']} ta workflow shabloni mavjud. "
-                f"Ulardan {stats['active']} ta faol. "
-                f"Trigger turlari: {', '.join(f'{k} {v} ta' for k, v in stats['triggers'].items())}. "
-                f"Murakkablik: {', '.join(f'{k} {v} ta' for k, v in stats['complexity'].items())}. "
-                f"Jami {stats['total_nodes']} ta node, {stats['unique_integrations']} xil integratsiya."
-            )
-            return {"response": response, "context": str(stats), "source": "n8n_workflow"}
-        except Exception as e:
-            log.error("Stats xatosi: %s", e)
-            return {"response": "Statistika olishda xatolik.", "context": "", "source": "n8n_workflow"}
-
-    async def _handle_categories(self) -> dict:
-        categories = await asyncio.to_thread(self.db.get_service_categories)
-        lines = [f"  * {cat}: {', '.join(srvs)}" for cat, srvs in sorted(categories.items())]
-        response = "Mavjud kategoriyalar:\n" + "\n".join(lines)
-        return {"response": response, "context": str(list(categories.keys())), "source": "n8n_workflow"}
-
-    async def _handle_execute(self, query: str) -> dict:
-        workflow_name = await asyncio.to_thread(self._resolve_workflow_name, query)
-
-        if not workflow_name:
-            return await self._handle_search(query)
-
-        if self.executor is None:
+        stats = await self._client.get_stats()
+        if stats is None:
             return {
-                "response": f"'{workflow_name}' workflow topildi, lekin workflow muharriki mavjud emas.",
-                "context": workflow_name,
-                "source": "n8n_workflow",
-            }
-
-        try:
-            if callable(self.executor):
-                if asyncio.iscoroutinefunction(self.executor):
-                    result = await self.executor(workflow_name)
-                else:
-                    result = await asyncio.to_thread(self.executor, workflow_name)
-
-            msg = f"'{workflow_name}' workflow bajarildi."
-            if result:
-                msg += f" Natija: {result}"
-            return {"response": msg, "context": str(result), "source": "n8n_workflow"}
-
-        except Exception as e:
-            log.error("Workflow bajarish xatosi: %s", e)
-            return {
-                "response": f"'{workflow_name}' workflow bajarishda xatolik: {e}",
+                "response": (
+                    "n8n workflow templates server ishlamayapti. Serverni ishga tushiring: python api_server.py"
+                ),
                 "context": "",
                 "source": "n8n_workflow",
             }
 
+        response = (
+            f"n8n workflow bazasi: {stats['total']} ta shablon. "
+            f"Faol: {stats['active']}, Nofaol: {stats['inactive']}. "
+            f"Trigger turlari: {', '.join(f'{k} {v}' for k, v in stats['triggers'].items())}. "
+            f"Murakkablik: {', '.join(f'{k} {v}' for k, v in stats['complexity'].items())}. "
+            f"Integratsiyalar soni: {stats['unique_integrations']}."
+        )
+        return {"response": response, "context": str(stats), "source": "n8n_workflow"}
+
+    async def _handle_categories(self) -> dict:
+        data = await self._client.get_categories()
+        if data is None:
+            return {
+                "response": "n8n workflow templates server ishlamayapti.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
+
+        categories = data.get("categories", {})
+        if not categories:
+            return {
+                "response": "Kategoriyalar topilmadi.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
+
+        lines = [f"  * {cat}: {', '.join(srvs)}" for cat, srvs in sorted(categories.items())]
+        response = "n8n workflow kategoriyalari:\n" + "\n".join(lines)
+        return {"response": response, "context": str(list(categories.keys())), "source": "n8n_workflow"}
+
+    async def _handle_execute(self, query: str) -> dict:
+        workflow_name = self._extract_workflow_name(query)
+        if not workflow_name:
+            return {
+                "response": "Qaysi workflow ni ishga tushirish kerak? Nomini ayting.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
+
+        result = await self._client.search_workflows(query=workflow_name, per_page=1)
+        if result is None or not result.get("workflows"):
+            return {
+                "response": f"'{workflow_name}' nomli workflow topilmadi.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
+
+        wf = result["workflows"][0]
+        filename = wf["filename"]
+        name = wf["name"]
+
+        return {
+            "response": (
+                f"'{name}' workflow topildi (fayl: {filename}). "
+                f"n8n veb-interfeysidan ishga tushiring: http://localhost:5678/workflow/{filename}"
+            ),
+            "context": filename,
+            "source": "n8n_workflow",
+        }
+
+    async def _handle_diagram(self, query: str) -> dict:
+        parts = query.lower().split()
+        filename = None
+        for part in parts:
+            if part.endswith(".json"):
+                filename = part
+                break
+
+        if not filename:
+            result = await self._client.search_workflows(query=query, per_page=1)
+            if result and result.get("workflows"):
+                filename = result["workflows"][0]["filename"]
+
+        if not filename:
+            return {
+                "response": "Workflow faylini topa olmadim.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
+
+        diagram = await self._client.get_workflow_diagram(filename)
+        if diagram is None:
+            return {
+                "response": f"'{filename}' uchun diagram olishda xatolik.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
+
+        return {
+            "response": f"Workflow diagram ({filename}):\n```\n{diagram}\n```",
+            "context": filename,
+            "source": "n8n_workflow",
+        }
+
+    async def _handle_create(self, query: str) -> dict:
+        return {
+            "response": "Workflow yaratish uchun n8n veb-interfeysini ishlating: http://localhost:5678",
+            "context": "",
+            "source": "n8n_workflow",
+        }
+
     async def _handle_search(self, query: str) -> dict | None:
-        trigger = "all"
-        complexity = "all"
-        text = query.lower()
+        result = await self._client.search_workflows(query=query, per_page=5)
+        if result is None:
+            return {
+                "response": "n8n workflow templates server ishlamayapti.",
+                "context": "",
+                "source": "n8n_workflow",
+            }
 
-        if _match_keywords(text, ["webhook", "web", "api"]):
-            trigger = "Webhook"
-        elif _match_keywords(text, ["scheduled", "schedule", "vaqt", "rejala"]):
-            trigger = "Scheduled"
-        elif _match_keywords(text, ["manual"]):
-            trigger = "Manual"
-
-        if _match_keywords(text, ["simple", "low", "kichik", "oson"]):
-            complexity = "low"
-        elif _match_keywords(text, ["medium", "o'rta"]):
-            complexity = "medium"
-        elif _match_keywords(text, ["complex", "high", "murakkab", "katta"]):
-            complexity = "high"
-
-        try:
-            results, total = await asyncio.to_thread(
-                self.db.search_workflows,
-                query=query,
-                trigger_filter=trigger,
-                complexity_filter=complexity,
-                limit=5,
-                offset=0,
-            )
-        except Exception as e:
-            log.error("Workflow qidiruv xatosi: %s", e)
-            return None
-
-        if not results:
+        workflows = result.get("workflows", [])
+        total = result.get("total", 0)
+        if not workflows:
             return None
 
         lines = []
-        for w in results:
-            integrations = ", ".join(w.get("integrations", [])[:3]) or "none"
-            lines.append(
-                f"  * {w['name']} - {w['trigger_type']}, {w['node_count']} node, "
-                f"{integrations}"
-            )
+        for w in workflows:
+            integrations = ", ".join(w.get("integrations", [])[:3]) or "yo'q"
+            status = "faol" if w.get("active") else "nofaol"
+            lines.append(f"  * {w['name']} — {w['trigger_type']}, {w['node_count']} node, {integrations} [{status}]")
 
         response = (
-            f"{total} ta workflow topildi. Eng moslari:\n" + "\n".join(lines[:5])
+            f"{total} ta workflow topildi (sahifa {result.get('page', 1)}/{result.get('pages', 1)}):\n"
+            + "\n".join(lines)
         )
         return {
             "response": response,
-            "context": str([r["filename"] for r in results[:5]]),
+            "context": str([w["filename"] for w in workflows]),
             "source": "n8n_workflow",
         }
+
+    def _extract_workflow_name(self, query: str) -> str:
+        text = query.lower()
+        for word in ["workflow", "ishga tushir", "bajar", "run", "execute", "start", "trigger"]:
+            text = text.replace(word, "")
+        return text.strip()

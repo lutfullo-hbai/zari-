@@ -1,9 +1,9 @@
 import logging
 import re
+from datetime import UTC, datetime
 
 from db.database import get_pool
 from skills.base import BaseSkill
-
 
 log = logging.getLogger("zari")
 
@@ -66,8 +66,16 @@ class WikiSkill(BaseSkill):
                 full_key = f"favorite_{category}"
                 val = await self._get(full_key)
                 if val:
-                    return {"response": f"Sevimli {category}ingiz: {val}", "context": f"{full_key}={val}", "source": "wiki"}
-                return {"response": f"Sevimli {category}ingizni bilmayman. Ayting, eslab qolay.", "context": "", "source": "wiki"}
+                    return {
+                        "response": f"Sevimli {category}ingiz: {val}",
+                        "context": f"{full_key}={val}",
+                        "source": "wiki",
+                    }
+                return {
+                    "response": f"Sevimli {category}ingizni bilmayman. Ayting, eslab qolay.",
+                    "context": "",
+                    "source": "wiki",
+                }
 
             if key == "name":
                 val = await self._get("name")
@@ -112,7 +120,11 @@ class WikiSkill(BaseSkill):
                 value = m.group(2)
                 full_key = f"favorite_{category}"
                 await self._set(full_key, value)
-                return {"response": f"Eslab qoldim: sevimli {category}ingiz {value}.", "context": f"{full_key}={value}", "source": "wiki"}
+                return {
+                    "response": f"Eslab qoldim: sevimli {category}ingiz {value}.",
+                    "context": f"{full_key}={value}",
+                    "source": "wiki",
+                }
 
             if key == "name":
                 val = m.group(1).capitalize()
@@ -132,12 +144,20 @@ class WikiSkill(BaseSkill):
             if key == "profession":
                 val = m.group(1)
                 await self._set("profession", val)
-                return {"response": f"Siz {val} ekanligingizni eslab qoldim.", "context": f"profession={val}", "source": "wiki"}
+                return {
+                    "response": f"Siz {val} ekanligingizni eslab qoldim.",
+                    "context": f"profession={val}",
+                    "source": "wiki",
+                }
 
             if key == "phone":
                 val = m.group(1).strip()
                 await self._set("phone", val)
-                return {"response": f"Telefon raqamingizni eslab qoldim: {val}", "context": f"phone={val}", "source": "wiki"}
+                return {
+                    "response": f"Telefon raqamingizni eslab qoldim: {val}",
+                    "context": f"phone={val}",
+                    "source": "wiki",
+                }
 
             if key == "email":
                 val = m.group(1).strip()
@@ -147,7 +167,11 @@ class WikiSkill(BaseSkill):
             if key == "need":
                 val = m.group(1)
                 await self._set("need", val)
-                return {"response": f"Sizga {val} kerakligini eslab qoldim.", "context": f"need={val}", "source": "wiki"}
+                return {
+                    "response": f"Sizga {val} kerakligini eslab qoldim.",
+                    "context": f"need={val}",
+                    "source": "wiki",
+                }
 
         return None
 
@@ -157,7 +181,11 @@ class WikiSkill(BaseSkill):
             rows = await conn.fetch("SELECT key, value FROM wiki ORDER BY key")
 
         if not rows:
-            return {"response": "Siz haqingizda hech narsa bilmayman. Menga o'zingiz haqida ayting.", "context": "", "source": "wiki"}
+            return {
+                "response": "Siz haqingizda hech narsa bilmayman. Menga o'zingiz haqida ayting.",
+                "context": "",
+                "source": "wiki",
+            }
 
         parts = []
         for r in rows:
@@ -183,8 +211,12 @@ class WikiSkill(BaseSkill):
     async def _set(self, key: str, value: str):
         pool = await get_pool()
         async with pool.acquire() as conn:
+            now = datetime.now(UTC)
             await conn.execute(
-                "INSERT INTO wiki (key, value, updated_at) VALUES ($1, $2, NOW()) "
-                "ON CONFLICT(key) DO UPDATE SET value = $2, updated_at = NOW()",
-                key, value,
+                """INSERT INTO wiki (key, value, updated_at)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT(key) DO UPDATE SET value = $2, updated_at = $3""",
+                key,
+                value,
+                now,
             )

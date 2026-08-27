@@ -2,27 +2,60 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from db.database import get_pool
-from llm.ollama import OllamaClient
+from llm.factory import LLMClient
 
 log = logging.getLogger("zari")
 
 CATEGORIES = {"identity", "interest", "preference", "habit", "insight"}
 
 _PERSONA_KEYWORDS = {
-    "mening", "men", "ismim", "familiya", "yoshim", "kasbim",
-    "ishim", "manzil", "yashayman", "tug'ilgan", "o'qiyman",
-    "yoqadi", "yoqtirmayman", "qiziqaman", "hobbi", "mashg'ulot",
-    "dasturchi", "o'qituvchi", "shifokor", "talaba", "o'quvchi",
-    "sevimli", "yaxshi", "xohlayman", "rejam",
-    "oilam", "ukam", "akam", "singlim", "onam", "dadam",
+    "mening",
+    "men",
+    "ismim",
+    "familiya",
+    "yoshim",
+    "kasbim",
+    "ishim",
+    "manzil",
+    "yashayman",
+    "tug'ilgan",
+    "o'qiyman",
+    "yoqadi",
+    "yoqtirmayman",
+    "qiziqaman",
+    "hobbi",
+    "mashg'ulot",
+    "dasturchi",
+    "o'qituvchi",
+    "shifokor",
+    "talaba",
+    "o'quvchi",
+    "sevimli",
+    "yaxshi",
+    "xohlayman",
+    "rejam",
+    "oilam",
+    "ukam",
+    "akam",
+    "singlim",
+    "onam",
+    "dadam",
 }
 
 _PERSONA_PHRASES = [
-    "my name", "i am", "i'm", "i work", "i live", "i like",
-    "i love", "i study", "i hate", "i need",
+    "my name",
+    "i am",
+    "i'm",
+    "i work",
+    "i live",
+    "i like",
+    "i love",
+    "i study",
+    "i hate",
+    "i need",
 ]
 
 _EXTRACTION_COOLDOWN = 30
@@ -46,12 +79,12 @@ Natijani JSON formatida qaytaring:
 ]
 
 Misol:
-- "mening ismim Ali" → [{{"key": "name", "value": "Ali", "category": "identity"}}]
-- "jazz musiqa yoqadi" → [{{"key": "music_genre", "value": "jazz", "category": "interest"}}]
-- "men dasturchiman" → [{{"key": "profession", "value": "dasturchi", "category": "identity"}}]
-- "toshkentda yashayman" → [{{"key": "location", "value": "Toshkent", "category": "identity"}}]
-- "qisqa javob bersangiz yaxshi" → [{{"key": "response_style", "value": "short", "category": "preference"}}]
-- "kechasi ishlayman" → [{{"key": "work_hours", "value": "night", "category": "habit"}}]
+- "mening ismim Ali" -> [{{"key": "name", "value": "Ali", "category": "identity"}}]
+- "jazz musiqa yoqadi" -> [{{"key": "music_genre", "value": "jazz", "category": "interest"}}]
+- "men dasturchiman" -> [{{"key": "profession", "value": "dasturchi", "category": "identity"}}]
+- "toshkentda yashayman" -> [{{"key": "location", "value": "Toshkent", "category": "identity"}}]
+- "qisqa javob bersangiz yaxshi" -> [{{"key": "response_style", "value": "short", "category": "preference"}}]
+- "kechasi ishlayman" -> [{{"key": "work_hours", "value": "night", "category": "habit"}}]
 """
 
 
@@ -70,27 +103,35 @@ class UserPersona:
                     category TEXT NOT NULL DEFAULT 'general',
                     confidence REAL DEFAULT 1.0,
                     source TEXT DEFAULT 'manual',
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                    updated_at TIMESTAMPTZ DEFAULT now()
                 )
             """)
 
     async def get(self, key: str) -> str | None:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT value FROM persona WHERE key = $1", key
-            )
+            row = await conn.fetchrow("SELECT value FROM persona WHERE key = $1", key)
             return row["value"] if row else None
 
-    async def set(self, key: str, value: str, category: str = "general", confidence: float = 1.0, source: str = "manual"):
+    async def set(
+        self, key: str, value: str, category: str = "general", confidence: float = 1.0, source: str = "manual"
+    ):
         pool = await get_pool()
         async with pool.acquire() as conn:
+            now = datetime.now(UTC)
             await conn.execute(
                 """INSERT INTO persona (key, value, category, confidence, source, updated_at)
                    VALUES ($1, $2, $3, $4, $5, $6)
                    ON CONFLICT (key) DO UPDATE
-                   SET value = $2, category = $3, confidence = $4, source = $5, updated_at = $6""",
-                key, value, category, confidence, source, datetime.now(timezone.utc),
+                   SET value = $2, category = $3,
+                       confidence = $4, source = $5,
+                       updated_at = $6""",
+                key,
+                value,
+                category,
+                confidence,
+                source,
+                now,
             )
         self._bust_cache()
 
@@ -99,23 +140,21 @@ class UserPersona:
         async with pool.acquire() as conn:
             result = await conn.execute("DELETE FROM persona WHERE key = $1", key)
         self._bust_cache()
-        return result != "DELETE 0"
+        return result.split()[-1] != "0"
 
     async def delete_all(self) -> int:
         pool = await get_pool()
         async with pool.acquire() as conn:
             result = await conn.execute("DELETE FROM persona")
         self._bust_cache()
-        return int(result.split()[-1]) if result else 0
+        return int(result.split()[-1])
 
     async def get_all(self) -> list[dict]:
         if self._cache is not None:
             return list(self._cache.values())
         pool = await get_pool()
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT key, value, category FROM persona ORDER BY category, key"
-            )
+            rows = await conn.fetch("SELECT key, value, category FROM persona ORDER BY category, key")
         self._cache = {r["key"]: dict(r) for r in rows} if rows else {}
         return list(self._cache.values())
 
@@ -162,27 +201,22 @@ class UserPersona:
         text_lower = text.lower().strip()
         if len(text_lower) < _MIN_EXTRACT_LENGTH:
             return False
-
         now = time.time()
         if now - self._last_extraction < _EXTRACTION_COOLDOWN:
             return False
-
         text_words = set(text_lower.split())
         if text_words & _PERSONA_KEYWORDS:
             self._last_extraction = now
             return True
-
         for phrase in _PERSONA_PHRASES:
             if phrase in text_lower:
                 self._last_extraction = now
                 return True
-
         return False
 
-    async def extract_from_conversation(self, text: str, llm: OllamaClient):
+    async def extract_from_conversation(self, text: str, llm: LLMClient):
         if not self._should_extract(text):
             return
-
         prompt = EXTRACT_PROMPT.format(text=text.strip())
         try:
             raw = await asyncio.wait_for(
@@ -198,7 +232,7 @@ class UserPersona:
                     cat = category if category in CATEGORIES else "insight"
                     await self.set(key, value, cat, source="llm")
                     log.info("Persona: %s = %s (%s)", key, value, cat)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.debug("Persona extraction timeout")
         except Exception as e:
             log.debug("Persona extraction error: %s", e)
@@ -207,7 +241,6 @@ class UserPersona:
         text = raw.strip()
         if not text:
             return []
-
         if text.startswith("["):
             try:
                 data = json.loads(text)
@@ -215,7 +248,6 @@ class UserPersona:
                     return data
             except json.JSONDecodeError:
                 pass
-
         start = text.find("[")
         if start == -1:
             return []
@@ -227,7 +259,7 @@ class UserPersona:
                 depth -= 1
                 if depth == 0:
                     try:
-                        data = json.loads(text[start:i+1])
+                        data = json.loads(text[start : i + 1])
                         if isinstance(data, list):
                             return data
                     except (json.JSONDecodeError, ValueError):
@@ -249,5 +281,3 @@ class UserPersona:
             if k in vals:
                 parts.append(vals[k])
         return ", ".join(parts) if parts else "Ma'lumotli foydalanuvchi"
-
-

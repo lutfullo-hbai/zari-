@@ -1,6 +1,5 @@
 import enum
 import logging
-from typing import Literal
 
 log = logging.getLogger("zari")
 
@@ -26,7 +25,7 @@ SKILL_PARAMS: dict[str, list[str]] = {
     "music": ["song"],
     "weather": ["city"],
     "timer": ["duration"],
-    "note": ["content"],
+    "notes": ["content"],
     "search": ["query"],
     "filemanager": [],
     "email": ["target", "content"],
@@ -104,8 +103,8 @@ class DialogManager:
         if not self.remaining_params:
             self.reset()
             return None
-        self.remaining_params.pop(0)
-        self.collected_params[value] = value
+        param_name = self.remaining_params.pop(0)
+        self.collected_params[param_name] = value
         if self.remaining_params:
             return self.next_question()
         return None

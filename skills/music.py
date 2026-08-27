@@ -49,10 +49,7 @@ class MusicSkill(BaseSkill):
                 duration = f" [{duration}]"
             lines.append(f"  {i}. {r['title']}{duration}")
 
-        response = (
-            f"Topilgan musiqalar:\n" + "\n".join(lines) + "\n\n"
-            f"Qaysi birini tinglaysiz?"
-        )
+        response = "Topilgan musiqalar:\n" + "\n".join(lines) + "\n\nQaysi birini tinglaysiz?"
 
         return {
             "response": response,
@@ -68,9 +65,16 @@ class MusicSkill(BaseSkill):
     async def _search_youtube(self, query: str) -> list[dict]:
         def _search():
             result = subprocess.run(
-                [YT_DLP_CMD, "ytsearch" + str(MAX_RESULTS) + ":" + query,
-                 "--dump-json", "--flat-playlist", "--no-warnings"],
-                capture_output=True, text=True, timeout=15,
+                [
+                    YT_DLP_CMD,
+                    "ytsearch" + str(MAX_RESULTS) + ":" + query,
+                    "--dump-json",
+                    "--flat-playlist",
+                    "--no-warnings",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             if result.returncode != 0:
                 log.warning("yt-dlp xatosi: %s", result.stderr.strip()[:200])
@@ -81,14 +85,17 @@ class MusicSkill(BaseSkill):
                 if not line:
                     continue
                 import json
+
                 try:
                     data = json.loads(line)
-                    entries.append({
-                        "title": data.get("title", ""),
-                        "url": f"https://youtube.com/watch?v={data.get('id', '')}",
-                        "duration": self._format_duration(data.get("duration", 0)),
-                        "channel": data.get("channel", ""),
-                    })
+                    entries.append(
+                        {
+                            "title": data.get("title", ""),
+                            "url": f"https://youtube.com/watch?v={data.get('id', '')}",
+                            "duration": self._format_duration(data.get("duration", 0)),
+                            "channel": data.get("channel", ""),
+                        }
+                    )
                 except json.JSONDecodeError:
                     continue
             return entries

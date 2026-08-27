@@ -125,10 +125,11 @@ Skill'larni dinamik yuklash — papkaga .py fayl tashlasang, Zari uni avtomatik 
 import importlib, pkgutil, inspect
 from skills.base import BaseSkill
 
+
 def load_skills():
     skills = {}
-    for finder, name, ispkg in pkgutil.iter_modules(['skills']):
-        module = importlib.import_module(f'skills.{name}')
+    for finder, name, ispkg in pkgutil.iter_modules(["skills"]):
+        module = importlib.import_module(f"skills.{name}")
         for _, obj in inspect.getmembers(module):
             if inspect.isclass(obj) and issubclass(obj, BaseSkill) and obj != BaseSkill:
                 skills[name] = obj()

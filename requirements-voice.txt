@@ -1,0 +1,9 @@
+# Ixtiyoriy ovoz paketlari — asosiy ishlash uchun SHART EMAS.
+# O'rnatish: pip install -r requirements-voice.txt
+#
+# openwakeword: "Zari" so'zi bilan uyg'otish (bo'lmasa Enter bilan ishlaydi)
+# piper-tts: oflayn TTS (bo'lmasa edge-tts ishlaydi)
+# DIQQAT: openwakeword Linux'da tflite-runtime so'raydi — ba'zi
+# Python versiyalarida wheel yo'q, shu sababdan asosiy requirements'da emas.
+openwakeword>=0.5.0; python_version < "3.13"
+piper-tts>=1.2.0

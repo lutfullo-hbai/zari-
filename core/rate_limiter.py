@@ -1,9 +1,8 @@
-import time
 import logging
+import time
 from collections import defaultdict
 
 from core.config import settings
-
 
 log = logging.getLogger("zari")
 

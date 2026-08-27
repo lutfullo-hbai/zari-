@@ -78,6 +78,7 @@ Har bir PR dev'ga merge qilishdan oldin:
 def process(d, x):
     pass
 
+
 # YAXSHI
 def process_user_data(user_data: dict, max_retries: int) -> Result:
     pass
@@ -100,10 +101,12 @@ def process(data):
     send_email(result)
     return result
 
+
 # YAXSHI — bitta ish qiladi
 def validate_and_calculate(data: dict) -> Result:
     validated = validate(data)
     return calculate(validated)
+
 
 def save_and_notify(result: Result) -> None:
     save_to_database(result)
@@ -126,9 +129,11 @@ class ZariPipeline:
     def email_send(self): ...
     def search_web(self): ...
 
+
 # YAXSHI — Single Responsibility
 class AudioProcessor:
     def process(self, audio: bytes) -> str: ...
+
 
 class SkillExecutor:
     def execute(self, intent: str, text: str) -> Result: ...
@@ -194,8 +199,10 @@ for attempt in range(3):
 def get_user(id):
     return db.query(id)
 
+
 # YAXSHI
 from collections.abc import Sequence
+
 
 def get_user(user_id: int) -> User | None:
     return db.query(User, user_id)

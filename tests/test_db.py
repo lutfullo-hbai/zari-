@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -59,6 +59,7 @@ class TestCache:
     async def test_get_cached_session_messages(self):
         mock_redis = AsyncMock()
         import json
+
         mock_redis.get.return_value = json.dumps([{"role": "user", "content": "salom"}])
         with patch("db.cache.get_redis", return_value=mock_redis):
             from db.cache import get_cached_session_messages
@@ -81,6 +82,7 @@ class TestCache:
     @pytest.mark.asyncio
     async def test_close_redis(self):
         import db.cache
+
         mock_redis = AsyncMock()
         db.cache._redis = mock_redis
 
@@ -93,52 +95,53 @@ class TestCache:
 
     def test_hash_deterministic(self):
         from db.cache import _hash
+
         assert _hash("salom") == _hash("salom")
         assert _hash("salom") != _hash("hello")
 
 
 class TestDatabase:
     @pytest.mark.asyncio
-    async def test_init_db_creates_tables(self):
+    async def test_init_db_delegates_to_alembic(self):
+        """init_db endi alembic upgrade head ni chaqiradi (bitta schema manba)."""
         import db.database
-        db.database._pool = None
-        mock_conn = AsyncMock()
-        mock_pool = MagicMock()
-        mock_pool.acquire.return_value = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-        with patch("db.database.asyncpg.create_pool", new_callable=AsyncMock, return_value=mock_pool):
+        db.database._pool = None
+
+        with patch("alembic.command.upgrade") as mock_upgrade, patch("alembic.config.Config") as mock_config_cls:
             await db.database.init_db()
-            exec_calls = mock_conn.execute.call_args_list
-            assert len(exec_calls) >= 3
+
+            mock_upgrade.assert_called_once_with(mock_config_cls.return_value, "head")
 
         db.database._pool = None
 
     @pytest.mark.asyncio
-    async def test_get_pool_creates_once(self):
-        import db.database
-        db.database._pool = None
-        mock_pool = MagicMock()
+    async def test_get_pool_returns_same_instance(self):
+        import asyncpg
 
-        with patch("db.database.asyncpg.create_pool", new_callable=AsyncMock, return_value=mock_pool) as create:
+        import db.database
+
+        db.database._pool = None
+
+        mock_pool = AsyncMock()
+        with patch.object(asyncpg, "create_pool", new_callable=AsyncMock, return_value=mock_pool):
             pool1 = await db.database.get_pool()
             pool2 = await db.database.get_pool()
 
             assert pool1 is pool2
-            create.assert_called_once()
 
         db.database._pool = None
 
     @pytest.mark.asyncio
-    async def test_close_db(self):
+    async def test_close_db_resets_pool(self):
         import db.database
-        mock_pool = MagicMock()
-        mock_pool.close = AsyncMock()
+
+        mock_pool = AsyncMock()
         db.database._pool = mock_pool
 
         await db.database.close_db()
 
-        mock_pool.close.assert_called_once()
         assert db.database._pool is None
+        mock_pool.close.assert_called_once()
 
         db.database._pool = None

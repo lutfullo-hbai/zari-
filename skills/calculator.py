@@ -1,6 +1,6 @@
 import ast
-import operator
 import logging
+import operator
 
 from skills.base import BaseSkill
 
@@ -24,7 +24,7 @@ class CalculatorSkill(BaseSkill):
 
     async def execute(self, query: str) -> dict | None:
         text = query.lower().strip()
-        for kw in ["hisobla", "calculate", "necha", "qancha", "="]:
+        for kw in ["hisobla", "calculate", "necha", "qancha", "=", "boladi", "bo'ladi", "ni"]:
             text = text.replace(kw, "").strip()
         text = text.replace("x", "*").replace("×", "*").replace("÷", "/")
         text = text.replace("+", " + ").replace("-", " - ").replace("*", " * ").replace("/", " / ")
@@ -37,8 +37,19 @@ class CalculatorSkill(BaseSkill):
             result = self._safe_eval(text)
             response = f"{text} = {result}"
             return {"response": response, "context": response, "source": "calculator"}
-        except Exception as e:
-            log.debug("Calculator xatosi: %s", e)
+        except Exception:
+            try:
+                numbers = [s for s in text.split() if s.replace(".", "").replace("-", "").isdigit()]
+                ops = [s for s in text.split() if s in "+-*/"]
+                if numbers and ops:
+                    expr = " ".join(
+                        numbers[i] + " " + ops[i] if i < len(ops) else numbers[i] for i in range(len(numbers))
+                    )
+                    result = self._safe_eval(expr)
+                    response = f"{expr} = {result}"
+                    return {"response": response, "context": response, "source": "calculator"}
+            except Exception:
+                pass
             return None
 
     def _safe_eval(self, expr: str) -> float:

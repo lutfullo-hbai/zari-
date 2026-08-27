@@ -62,19 +62,25 @@ class NetworkSkill(BaseSkill):
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ping", "-c", "2", "-W", "3", host,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                "ping",
+                "-c",
+                "2",
+                "-W",
+                "3",
+                host,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
             output = stdout.decode() or stderr.decode()
 
             if "ms" in output:
-                lines = [l.strip() for l in output.split("\n") if "ms" in l]
+                lines = [line.strip() for line in output.split("\n") if "ms" in line]
                 response = f"{host} ga ping:\n" + "\n".join(lines[:3])
             else:
                 response = f"{host} ga ulanish yo'q."
             return {"response": response, "context": output[:300], "source": "network"}
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"response": f"{host} ga ping timeout (10 soniya).", "context": "", "source": "network"}
         except Exception as e:
             log.warning("Ping xatosi: %s", e)

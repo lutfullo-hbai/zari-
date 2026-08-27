@@ -1,7 +1,9 @@
 import asyncio
 import time
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from llm.persona import UserPersona
 
 
@@ -22,7 +24,7 @@ class MockPool:
         return AsyncMock(return_value=[])()
 
     def execute(self, *args, **kwargs):
-        return AsyncMock()()
+        return AsyncMock(return_value="DELETE 0")()
 
 
 @pytest.fixture
@@ -130,7 +132,6 @@ class TestUserPersona:
         with patch.object(persona, "get_all", return_value=rows):
             text = await persona.get_system_text()
             assert text.index("Ismingiz") < text.index("Kasbingiz")
-
 
     def test_parse_llm_response_value_with_brackets(self, persona):
         raw = '[{"key": "test", "value": "some [text]", "category": "identity"}]'

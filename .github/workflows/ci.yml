@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # Lokal dev bilan bir xil versiya — import tartibi farqlanmasligi uchun
+      - run: pip install ruff==0.16.3
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    name: Tests (pytest + real DB)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: zari
+          POSTGRES_PASSWORD: zari
+          POSTGRES_DB: zari
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U zari"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://zari:zari@localhost:5434/zari
+      REDIS_URL: redis://localhost:6380/0
+      ZARI_DB_TESTS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: System kutubxonalar (PortAudio testlar uchun)
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2
+      - name: Python dependency'lar
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          # pytest versiyalari lokal muhitga mos (9.x / 1.x)
+          pip install "pytest>=8,<10" "pytest-asyncio>=1,<2"
+      - name: Testlar (haqiqiy PostgreSQL + Redis bilan)
+        run: pytest -q --tb=short

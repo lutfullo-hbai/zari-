@@ -2,13 +2,14 @@ import asyncio
 import logging
 
 import httpx
-from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
 import wikipedia
+from bs4 import BeautifulSoup
+from ddgs import DDGS
 
 from core.config import settings
 from db.cache import cache_llm_response, get_cached_llm_response
-from llm.ollama import OllamaClient
+from llm.factory import LLMClient, create_llm_client
+from llm.response_cleaner import clean_llm_response
 from skills.base import BaseSkill
 
 log = logging.getLogger("zari")
@@ -25,13 +26,11 @@ class SearchSkill(BaseSkill):
     timeout = 60.0
     retries = 1
 
-    def __init__(self, llm: OllamaClient | None = None):
-        self.llm = llm or OllamaClient()
+    def __init__(self, llm: LLMClient | None = None):
+        self.llm = llm or create_llm_client()
         self.perplexica_url = settings.perplexica_url.rstrip("/") if settings.perplexica_url else ""
         self.search_backend = (settings.search_backend or "auto").lower()
-        self.perplexica_focus = (
-            settings.perplexica_focus_mode or "web"
-        ).lower()
+        self.perplexica_focus = (settings.perplexica_focus_mode or "web").lower()
         if self.perplexica_focus not in PERPLEXICA_FOCUS_MODES:
             self.perplexica_focus = "web"
 
@@ -95,6 +94,34 @@ class SearchSkill(BaseSkill):
                 pass
         return result
 
+    _EMBED_KEYWORDS = {"nomic", "embed", "bert", "minilm", "mxbai"}
+
+    async def _get_vane_providers(self) -> dict | None:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{self.perplexica_url}/api/providers")
+                resp.raise_for_status()
+                data = resp.json()
+                for p in data.get("providers", []):
+                    if p["name"].lower() == "ollama":
+                        chat = next(
+                            (
+                                m
+                                for m in p.get("chatModels", [])
+                                if not any(kw in m["key"].lower() for kw in self._EMBED_KEYWORDS)
+                            ),
+                            None,
+                        ) or next(iter(p.get("chatModels", [])), {})
+                        embed = next(iter(p.get("embeddingModels", [])), {})
+                        return {
+                            "providerId": p["id"],
+                            "chatKey": chat.get("key", ""),
+                            "embedKey": embed.get("key", ""),
+                        }
+        except Exception as e:
+            log.warning("Vane providers xatosi: %s", e)
+        return None
+
     async def _search_with_perplexica(self, query: str) -> dict | None:
         if not self.perplexica_url:
             return None
@@ -102,37 +129,42 @@ class SearchSkill(BaseSkill):
         if self.search_backend not in {"auto", "perplexica"}:
             return None
 
+        providers = await self._get_vane_providers()
+        if not providers:
+            return None
+
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     f"{self.perplexica_url}/api/search",
                     json={
+                        "chatModel": {
+                            "providerId": providers["providerId"],
+                            "key": providers["chatKey"],
+                        },
+                        "embeddingModel": {
+                            "providerId": providers["providerId"],
+                            "key": providers["embedKey"],
+                        },
+                        "sources": [self.perplexica_focus],
                         "query": query,
-                        "focusMode": self.perplexica_focus,
                     },
                     headers={"Content-Type": "application/json"},
                 )
                 response.raise_for_status()
                 data = response.json()
 
-            answer = ""
-            sources = []
-
-            messages = data.get("message") or []
-            for msg in messages:
-                if isinstance(msg, dict):
-                    if msg.get("type") == "text":
-                        answer = msg.get("content", "")
-                    elif msg.get("type") == "sources":
-                        sources = msg.get("sources", [])
+            answer = data.get("message", "")
+            sources = data.get("sources", [])
 
             if not answer:
                 return None
 
-            source_str = "\n".join(
-                s.get("metadata", {}).get("title", s.get("url", ""))
-                for s in sources[:MAX_RESULTS]
-            ) if sources else ""
+            source_str = (
+                "\n".join(s.get("metadata", {}).get("title", s.get("url", "")) for s in sources[:MAX_RESULTS])
+                if sources
+                else ""
+            )
 
             context = answer
             if source_str:
@@ -149,18 +181,17 @@ class SearchSkill(BaseSkill):
 
     async def _search_web(self, query: str) -> list[dict]:
         try:
+
             def _search():
                 with DDGS(timeout=10) as ddgs:
                     return list(ddgs.text(query, max_results=MAX_RESULTS))
+
             results = await asyncio.wait_for(
                 asyncio.to_thread(_search),
                 timeout=15.0,
             )
-            return [
-                {"title": r["title"], "url": r["href"], "body": r.get("body", "")}
-                for r in results
-            ]
-        except asyncio.TimeoutError:
+            return [{"title": r["title"], "url": r["href"], "body": r.get("body", "")} for r in results]
+        except TimeoutError:
             log.error("Qidiruv timeout: 15 soniya")
             return []
         except Exception as e:
@@ -193,27 +224,38 @@ class SearchSkill(BaseSkill):
 
     async def _wikipedia(self, query: str) -> str | None:
         try:
+
             def _wiki_search_uz():
                 wikipedia.set_lang("uz")
                 return wikipedia.search(query)
+
             search = await asyncio.to_thread(_wiki_search_uz)
             if not search:
+
                 def _wiki_search_en():
                     wikipedia.set_lang("en")
                     return wikipedia.search(query)
+
                 search = await asyncio.to_thread(_wiki_search_en)
             if not search:
                 return None
             try:
+
                 def _wiki_page():
                     return wikipedia.page(search[0])
+
                 page = await asyncio.to_thread(_wiki_page)
                 text = page.summary[:MAX_CHARS_PER_PAGE]
                 return f"Wikipedia: {page.title}\n\n{text}"
-            except wikipedia.DisambiguationError as e:
-                if e.options:
+            except wikipedia.DisambiguationError as exc:
+                # except-o'zgaruvchisi blok oxirida o'chiriladi —
+                # nested funksiyaga ishlatishdan oldin alohida olib qo'yamiz
+                options = list(getattr(exc, "options", None) or [])
+                if options:
+
                     def _wiki_disambig():
-                        return wikipedia.page(e.options[0])
+                        return wikipedia.page(options[0])
+
                     page = await asyncio.to_thread(_wiki_disambig)
                     text = page.summary[:MAX_CHARS_PER_PAGE]
                     return f"Wikipedia: {page.title}\n\n{text}"
@@ -226,18 +268,21 @@ class SearchSkill(BaseSkill):
     async def _summarize(self, context: str, query: str) -> str:
         messages = [
             {"role": "system", "content": "Siz faqat o'zbek tilida javob beradigan yordamchisiz."},
-            {"role": "user", "content": (
-                "Berilgan matn asosida foydalanuvchi savoliga o'zbek tilida qisqa va aniq javob ber. "
-                "Faqat matndagi ma'lumotlardan foydalan, o'zing ma'lumot qo'shma. "
-                "Javob 3-5 gapdan oshmasin.\n\n"
-                f"Foydalanuvchi: {query}\n\n"
-                f"Matn: {context[:4000]}\n\n"
-                "Javob:"
-            )},
+            {
+                "role": "user",
+                "content": (
+                    "Berilgan matn asosida foydalanuvchi savoliga o'zbek tilida qisqa va aniq javob ber. "
+                    "Faqat matndagi ma'lumotlardan foydalan, o'zing ma'lumot qo'shma. "
+                    "Javob 3-5 gapdan oshmasin.\n\n"
+                    f"Foydalanuvchi: {query}\n\n"
+                    f"Matn: {context[:4000]}\n\n"
+                    "Javob:"
+                ),
+            },
         ]
         try:
             resp = await self.llm.chat_async(messages, timeout=60)
-            return resp.strip()
+            return clean_llm_response(resp)
         except Exception as e:
             log.error("Xulosa xatosi: %s", e)
             return "Kechirasiz, ma'lumotni tahlil qilishda xatolik yuz berdi."
