@@ -68,25 +68,6 @@ class SkillExecutor:
                 return response, True
             return None, False
 
-        if intent == "workflow":
-            wf_skill = self.get_skill("n8n_workflow")
-            if wf_skill:
-                if not rate_limiter.is_allowed("N8nWorkflowSkill"):
-                    await self._respond(
-                        "Kechirasiz, workflow juda tez-tez ishga tushirilmoqda. Biroz kuting.",
-                        request_id,
-                    )
-                    return None, True
-                wf_result = await wf_skill.execute(text)
-                if wf_result:
-                    response = wf_result["response"]
-                    ctx = wf_result.get("context", "")
-                    src = wf_result.get("source", "")
-                    await self._memory.add("system", f"N8N workflow ma'lumoti ({src}): {ctx}")
-                    log.info("Workflow: %s", response)
-                    return response, True
-            return None, False
-
         skill = self.get_skill(intent)
         if not skill:
             return None, False
