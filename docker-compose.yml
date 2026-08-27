@@ -65,6 +65,20 @@ services:
       timeout: 5s
       retries: 5
 
+  n8n-templates:
+    build:
+      context: .
+      dockerfile: Dockerfile.templates
+    container_name: zari-n8n-templates
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./n8n_templates:/app/n8n_templates
+    environment:
+      - WORKFLOW_DB_PATH=/app/n8n_templates/database/workflows.db
+      - WORKFLOWS_DIR=/app/n8n_templates/workflows
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:

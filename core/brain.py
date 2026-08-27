@@ -29,7 +29,7 @@ AVAILABLE_SKILLS = [
     "system_info",
     "email",
     "music",
-    "workflow",
+    "n8n_workflow",
     "notes",
     "timer",
     "calculator",

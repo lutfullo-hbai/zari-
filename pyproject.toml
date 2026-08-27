@@ -49,6 +49,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+exclude = ["n8n_templates"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
