@@ -95,11 +95,12 @@ async def retrieve_context(
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT DISTINCT content FROM messages
+                SELECT content FROM messages
                 WHERE role = 'user'
                   AND content ILIKE ANY($1::text[])
-                  AND ($2::text IS NULL OR session_id <> $2)
-                ORDER BY created_at DESC
+                  AND ($2::text IS NULL OR session_id::text <> $2)
+                GROUP BY content
+                ORDER BY MAX(created_at) DESC
                 LIMIT $3
                 """,
                 [f"%{kw}%" for kw in keywords],

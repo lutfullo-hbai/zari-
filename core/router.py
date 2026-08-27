@@ -61,7 +61,12 @@ INTENT_PATTERNS: dict[str, str] = {
     "filemanager": r"\b(fayl\w*|folder\w*|papka\w*|katalog\w*|file\w*|directory)\b",
     "network": r"\b(ip|dns|ping|network|tarmoq)\b",
     "wiki": r"\b(eslab qol|uni esla|esimda saqla|bil|ismim|yoshim|manzil)\b",
-    "search": (r"\b(qidir|top|izla|search|find|" r"sabab|define|meaning|nima degan|" r"ma.lumot|tushuntir|izohla)"),
+    "search": (
+        r"\b(qidir|top|izla|search|find|"
+        r"sabab|define|meaning|nima degan|"
+        r"ma.lumot|tushuntir|izohla|"
+        r"article|maqola|topib ber|qidirib ber)"
+    ),
     "volume": (r"\b(ovoz\w*|tovush\w*|volume\w*|mute\w*|unmute\w*|jim)\b"),
     "brightness": (r"\b(yorqin\w*|xira\w*|xiralik|brightness\w*|ekranni yorug)\b"),
     "media": (

@@ -13,7 +13,6 @@ import sys
 
 import numpy as np
 import sounddevice as sd
-from voice.wake_word import WakeWordDetector
 
 from core.config import settings
 from core.logging import get_logger
@@ -21,6 +20,7 @@ from core.main import ZariPipeline
 from core.messages import Incoming
 from db.cache import close_redis
 from db.database import close_db
+from voice.wake import WakeWordDetector
 
 log = get_logger("zari.cli")
 

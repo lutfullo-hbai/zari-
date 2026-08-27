@@ -22,6 +22,7 @@ from llm.habits import analyze_and_store_habits
 from llm.long_term_memory import retrieve_context
 from llm.memory import SessionMemory
 from llm.persona import UserPersona
+from llm.response_cleaner import clean_llm_response
 from llm.translator import Translator
 from skills.base import BaseSkill
 from skills.email import EmailSkill
@@ -267,6 +268,7 @@ class ZariPipeline:
                     self.llm.chat_async(messages, timeout=60),
                     timeout=65,
                 )
+                response = clean_llm_response(response)
                 await cache_llm_response(llm_input, response)
                 log.info("LLM: %s", response)
                 return response

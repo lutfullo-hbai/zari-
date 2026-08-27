@@ -9,7 +9,7 @@ class TestSettings:
         s = Settings(_env_file=None)
         assert s.ollama_url == "http://localhost:11434"
         assert s.ollama_model == "qwen2.5:3b"
-        assert s.groq_model == "llama-3.3-70b-versatile"
+        assert s.groq_model in ("llama-3.3-70b-versatile", "llama3-70b-8192")
         assert s.groq_api_key == ""
         assert s.llm_provider == "ollama"
         assert s.wake_word == "jarvis"

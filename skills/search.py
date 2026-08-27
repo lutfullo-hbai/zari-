@@ -4,11 +4,12 @@ import logging
 import httpx
 import wikipedia
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from core.config import settings
 from db.cache import cache_llm_response, get_cached_llm_response
 from llm.factory import LLMClient, create_llm_client
+from llm.response_cleaner import clean_llm_response
 from skills.base import BaseSkill
 
 log = logging.getLogger("zari")
@@ -281,7 +282,7 @@ class SearchSkill(BaseSkill):
         ]
         try:
             resp = await self.llm.chat_async(messages, timeout=60)
-            return resp.strip()
+            return clean_llm_response(resp)
         except Exception as e:
             log.error("Xulosa xatosi: %s", e)
             return "Kechirasiz, ma'lumotni tahlil qilishda xatolik yuz berdi."
